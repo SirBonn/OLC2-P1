@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"fmt"
 	"log"
 
 	parser "compiler/parser"
@@ -84,16 +85,8 @@ func (v *DclVisitor) VisitFuncDecl(ctx *parser.FuncDeclContext) interface{} {
 			}
 		}
 
-		// void | int | float | string | bool | nil
-		// fn sumar(a int, b int) int
 		returnType := value.IVOR_NIL
 		var returnTypeToken antlr.Token = nil
-
-		// // TODO: Como se resuelve el tipo
-		// if ctx.Type_() != nil {
-		// 	returnType = ctx.Type_().GetText()
-		// 	returnTypeToken = ctx.Type_().GetStart()
-		// }
 
 		body := ctx.AllStmt()
 
@@ -119,54 +112,41 @@ func (v *DclVisitor) VisitFuncDecl(ctx *parser.FuncDeclContext) interface{} {
 }
 func (v *DclVisitor) VisitArgList(ctx *parser.ArgListContext) interface{} {
 
-	args := make([]*Param, 0)
+	if ctx == nil {
+		// fmt.Println("DEBUG: ctx es nil en VisitArgList")
+		return nil
+	}
+	// fmt.Printf("DEBUG: ArgList texto: '%s'\n", ctx.GetText())
+	// fmt.Printf("DEBUG: ArgList hijos: %d\n", ctx.GetChildCount())
 
-	for _, arg := range ctx.AllFunc_arg() {
-		// TODO: IVOR -> Param -> Arg
-		args = append(args, v.Visit(arg).(*Param))
+	for i := 0; i < ctx.GetChildCount(); i++ {
+		child := ctx.GetChild(i)
+		// fmt.Printf("DEBUG: Hijo %d: %T = '%s'\n", i, child, child)
+
+		if paramCtx, ok := child.(*parser.ParametrosContext); ok {
+			// fmt.Printf("DEBUG: Procesando parámetro %d\n", i)
+
+			// fmt.Println("DEBUG: *** A PUNTO DE LLAMAR v.Visit(paramCtx) ***")
+			result := v.Visit(paramCtx)
+			// fmt.Printf("DEBUG: Resultado: %v (tipo: %T)\n", result, result)
+
+			// AQUÍ ES LA LÍNEA 126 DEL ERROR
+			if result == nil {
+				// fmt.Println("DEBUG: ¡AQUÍ ES DONDE result ES NIL!")
+				continue
+			}
+
+			// Esta es probablemente la línea que falla
+			// fmt.Println("DEBUG: A punto de hacer conversión de tipo...")
+			// param, ok := result.(*Param)
+			if !ok {
+				fmt.Printf("DEBUG: Conversión falló. Tipo real: %T\n", result)
+				continue
+			}
+
+			// fmt.Printf("DEBUG: Conversión exitosa: %+v\n", param)
+		}
 	}
 
-	return args
+	return []*Param{} // Retornar algo válido por ahora
 }
-
-// func (v *DclVisitor) VisitFuncParam(ctx *parser.FuncParamContext) interface{} {
-
-// 	externName := ""
-// 	innerName := ""
-
-// 	// at least ID(0) is defined
-// 	// only 1 ID defined
-// 	if ctx.ID(1) == nil {
-// 		// innerName : type
-// 		// _ : type
-// 		innerName = ctx.ID(0).GetText()
-// 	} else {
-// 		// externName innerName : type
-// 		externName = ctx.ID(0).GetText()
-// 		innerName = ctx.ID(1).GetText()
-// 	}
-
-// 	passByReference := false
-
-// 	if ctx.INOUT_KW() != nil {
-// 		passByReference = true
-// 	}
-
-// 	paramType := ctx.Type_().GetText()
-
-// 	return &Param{
-// 		ExternName:      externName,
-// 		InnerName:       innerName,
-// 		PassByReference: passByReference,
-// 		Type:            paramType,
-// 		Token:           ctx.GetStart(),
-// 	}
-
-// }
-
-//	func (v *DclVisitor) VisitStructDecl(ctx *parser.StructDeclContext) interface{} {
-//		v.StructNames = append(v.StructNames, ctx.ID().GetText())
-//		return nil
-//	}
-// 	return nil
-// }

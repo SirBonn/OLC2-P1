@@ -75,43 +75,34 @@ func (v *ReplVisitor) GetReplContext() *ReplContext {
 	}
 }
 
-// ValidType verifica si el tipo es valido en el ScopeTrace
-// Esto se usa para validar tipos de variables, funciones, etc.
 func (v *ReplVisitor) ValidType(_type string) bool {
 	return v.ScopeTrace.GlobalScope.ValidType(_type)
 }
 
-// Visit es el metodo que se llama para visitar un nodo del arbol de sintaxis
-// Dependiendo del tipo de nodo, se llama al metodo correspondiente
-// Si es un ErrorNodeImpl, se lanza un error
 func (v *ReplVisitor) Visit(tree antlr.ParseTree) interface{} {
 	if tree == nil {
 		fmt.Println("⚠️ Árbol nulo recibido.")
 		return nil
 	}
+
 	fmt.Println("Enrutado------------------")
+	fmt.Printf("DEBUG: Visitando tipo: %T\n", tree)
+	// fmt.Printf("DEBUG: Texto del nodo: '%s'\n", tree.GetText())
+
 	switch node := tree.(type) {
 	case *antlr.ErrorNodeImpl:
 		log.Fatal(node.GetText())
-
 	case *parser.ProgramaContext:
 		return v.VisitPrograma(node)
-
 	case *parser.PrintlnStmtContext:
 		return v.VisitPrintlnStmt(node)
-
 	case *parser.PrintStmtContext:
 		return v.VisitPrintStmt(node)
 	case *parser.ValorexpresionContext:
-		// Visitamos el hijo de valorexpresion
 		return v.VisitValorexpresion(node)
-
 	case *compiler.DeclAssignContext:
-		fmt.Println("🔍 Visitando DeclAssign:", node.GetText())
 		return v.VisitValueDeclAssign(node)
-	// tiramos todos los case de los nodos literales
 	case *parser.ValorEnteroContext:
-		fmt.Println("🔍 Visitando ValorEntero:", node.GetText())
 		return v.VisitValorEntero(node)
 	case *parser.ValorFloatContext:
 		return v.VisitValorFloat(node)
@@ -125,16 +116,29 @@ func (v *ReplVisitor) Visit(tree antlr.ParseTree) interface{} {
 		return v.VisitValorCaracter(node)
 	case *parser.IdContext:
 		return v.VisitId(node)
-	// Expresiones binarias
 	case *parser.BinaryExpContext:
 		return v.VisitBinaryExp(node)
-	/// Agregamos las declaraciones
-	// asignaciones posibles
 	case *parser.StmtContext:
 		return v.VisitStmt(node)
 
+	case *parser.PlusAssignContext:
+		return v.VisitPlusAssign(node)
+
+	case *parser.MinusAssignContext:
+		return v.VisitMinusAssign(node)
+
+	case *parser.MulAssignContext:
+		return v.VisitMulAssign(node)
+
+	case *parser.DivAssignContext:
+		return v.VisitDivAssign(node)
+
+	case *parser.ModAssignContext:
+		return v.VisitModAssign(node)
+
 	default:
 		fmt.Printf("⚠️ Tipo inesperado en Visit(): %T\n", tree)
+
 		return tree.Accept(v) // fallback por si acaso
 	}
 
@@ -145,15 +149,32 @@ func (v *ReplVisitor) Visit(tree antlr.ParseTree) interface{} {
 // Este nodo es el nodo raiz del arbol de sintaxis
 // En este metodo recorremos todos los statements del programa
 func (v *ReplVisitor) VisitPrograma(ctx *parser.ProgramaContext) interface{} {
-
-	fmt.Println("🔍 Visitando el programa...")
-	// Vamos a recorrer todos los statements y los visitamos
-	for _, stmt := range ctx.AllStmt() {
-		fmt.Println("🔍 Visitando statement*:(text)", stmt.GetText())
-		v.Visit(stmt)
+	if ctx == nil {
+		fmt.Println("⚠️ ProgramaContext nulo")
+		return nil
 	}
 
-	return nil
+	statements := ctx.AllStmt()
+	if len(statements) == 0 {
+		fmt.Println("ℹ️ Programa vacío - no contiene statements")
+		return nil
+	}
+
+	fmt.Printf("🔍 Iniciando visita del programa (%d statements)\n", len(statements))
+
+	var lastResult any
+	for i, stmt := range statements {
+		fmt.Printf("\n📜 Statement %d/%d: %s\n", i+1, len(statements), stmt.GetText())
+
+		result := v.Visit(stmt)
+		if result != nil {
+			lastResult = result
+		}
+		fmt.Printf("🔍 Resultado del statement %d: %v\n", i+1, result)
+	}
+
+	fmt.Println("🏁 Finalizada la ejecución del programa")
+	return lastResult
 }
 
 /*
@@ -163,7 +184,7 @@ Ahora recorremos todos los stmts que tenemos en el programa
 */
 
 func (v *ReplVisitor) VisitStmt(ctx *parser.StmtContext) interface{} {
-	fmt.Println("🔍 Visitando statement*:", ctx.GetText())
+	// fmt.Println("Visitando statement:", ctx.GetText())
 
 	if ctx == nil || ctx.GetChildCount() == 0 {
 		fmt.Println("⚠️ Stmt vacío o nulo.")
@@ -172,36 +193,102 @@ func (v *ReplVisitor) VisitStmt(ctx *parser.StmtContext) interface{} {
 
 	node := ctx.GetChild(0)
 
-	// Aquí van todos los ifs como los que hicimos antes:
-	if printlnStmt, ok := node.(*parser.PrintlnStmtContext); ok {
+	switch stmt := node.(type) {
+	case *parser.PrintlnStmtContext:
 		fmt.Println("🔔 Visitando nodo println")
+		return v.VisitPrintlnStmt(stmt)
 
-		v.VisitPrintlnStmt(printlnStmt)
-		// visitamos un print normal
-	} else if printStmt, ok := node.(*parser.PrintStmtContext); ok {
+	case *parser.PrintStmtContext:
 		fmt.Println("🔔 Visitando nodo print")
-		v.VisitPrintStmt(printStmt)
-		// visitamos una declaracion
-	} else if declAssign, ok := node.(*parser.DeclAssignContext); ok {
+		return v.VisitPrintStmt(stmt)
+
+	case *parser.DeclAssignContext:
 		fmt.Println("🔔 Visitando nodo declAssign")
-		v.VisitValueDeclAssign(declAssign)
-	} else if directAssign, ok := node.(*parser.DirectAssignContext); ok {
+		return v.VisitValueDeclAssign(stmt)
+
+	case *parser.DirectAssignContext:
 		fmt.Println("🔔 Visitando nodo directAssign")
-		v.VisitDirectAssign(directAssign)
-	} else if ifStmt, ok := node.(*parser.IfStmtContext); ok {
+		return v.VisitDirectAssign(stmt)
+
+	case *parser.PlusAssignContext:
+		fmt.Println("🔔 Visitando nodo plusAssign (+=)")
+		return v.VisitPlusAssign(stmt)
+
+	case *parser.MinusAssignContext:
+		fmt.Println("🔔 Visitando nodo minusAssign (-=)")
+		return v.VisitMinusAssign(stmt)
+
+	case *parser.MulAssignContext:
+		fmt.Println("🔔 Visitando nodo mulAssign (*=)")
+		return v.VisitMulAssign(stmt)
+
+	case *parser.DivAssignContext:
+		fmt.Println("🔔 Visitando nodo divAssign (/=)")
+		return v.VisitDivAssign(stmt)
+
+	case *parser.ModAssignContext:
+		fmt.Println("🔔 Visitando nodo modAssign (%=)")
+		return v.VisitModAssign(stmt)
+
+	case *parser.IfStmtContext:
 		fmt.Println("🔔 Visitando nodo ifStmt")
-		v.VisitIfStmt(ifStmt)
-	} else if whileStmt, ok := node.(*parser.WhileStmtContext); ok {
+		return v.VisitIfStmt(stmt)
+
+	case *parser.WhileStmtContext:
 		fmt.Println("🔔 Visitando nodo whileStmt")
-		v.VisitWhileStmt(whileStmt)
-	} else if forStmt, ok := node.(*parser.ForStmtContext); ok {
+		return v.VisitWhileStmt(stmt)
+
+	case *parser.ForStmtContext:
 		fmt.Println("🔔 Visitando nodo forStmt")
-		v.VisitForStmt(forStmt)
-	} else {
+		return v.VisitForStmt(stmt)
+
+	case *parser.FuncCallContext:
+		fmt.Println("🔔 Visitando nodo funcCall")
+		return v.VisitFuncCall(stmt)
+
+	case *parser.FuncDeclContext:
+		fmt.Println("🔔 Visitando nodo funcDecl")
+		return v.VisitFuncDecl(stmt)
+
+	case *parser.StructDeclContext:
+		fmt.Println("🔔 Visitando nodo structDecl")
+		return v.VisitStructDecl(stmt)
+
+	case *parser.StructInstanciaContext:
+		fmt.Println("🔔 Visitando nodo structInstancia")
+		return v.VisitStructInstancia(stmt)
+
+	case *parser.ReturnStmtContext:
+		fmt.Println("🔔 Visitando nodo returnStmt")
+		return v.VisitReturnStmt(stmt)
+
+	case *parser.BreakStmtContext:
+		fmt.Println("🔔 Visitando nodo breakStmt")
+		return v.VisitBreakStmt(stmt)
+
+	case *parser.ContinueStmtContext:
+		fmt.Println("🔔 Visitando nodo continueStmt")
+		return v.VisitContinueStmt(stmt)
+
+	case *parser.IncredecreContext:
+		fmt.Println("🔔 Visitando nodo incredecre")
+		// return v.VisitIncredecre(stmt)
+
+	case *parser.ExpresionContext:
+		fmt.Println("🔔 Visitando expresión como statement")
+		// return v.VisitExpresion(stmt)
+
+	default:
 		fmt.Printf("⚠️ Tipo no reconocido dentro de stmt->: %T\n", node)
+		if node != nil {
+			// Intenta visitar el nodo como último recurso
+			// return node.Accept(v)
+		}
+		return nil
 	}
 
 	return nil
+
 }
 
 func (v *ReplVisitor) VisitDirectAssign(ctx *parser.DirectAssignContext) interface{} {
@@ -724,5 +811,260 @@ func (v *ReplVisitor) VisitFuncCall(ctx *compiler.FuncCallContext) interface{} {
 
 		return value.DefaultNilValue
 	}
+	return nil
+}
+
+// VisitPlusAssign maneja la asignación de suma
+func (v *ReplVisitor) VisitPlusAssign(ctx *parser.PlusAssignContext) interface{} {
+	id := ctx.Id_pattern().GetText()
+	variable := v.ScopeTrace.GetVariable(id)
+	if variable == nil {
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), "Variable '"+id+"' no encontrada")
+		return nil
+	}
+
+	// Obtenemos el valor actual de la variable
+	currentValue := variable.Value.Copy()
+
+	// Obtenemos el valor a sumar
+	valueToAdd := v.Visit(ctx.Expresion()).(value.IVOR)
+	if valueToAdd == nil {
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), "Expresión inválida para suma")
+		return nil
+	}
+
+	// Verificamos si el tipo soporta la operación Add usando type assertion
+	var newValue value.IVOR
+	var ok bool
+	var msg string
+
+	switch cv := currentValue.(type) {
+	case *value.IntValue:
+		newValue, ok, msg = cv.Add(valueToAdd)
+	case *value.FloatValue:
+		newValue, ok, msg = cv.Add(valueToAdd)
+	case *value.StringValue:
+		newValue, ok, msg = cv.Add(valueToAdd)
+	case *value.CharacterValue:
+		newValue, ok, msg = cv.Add(valueToAdd)
+	default:
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), "Operación '+=' no soportada para "+currentValue.Type())
+		return nil
+	}
+
+	if !ok {
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), msg)
+		return nil
+	}
+
+	// Asignamos el nuevo valor a la variable
+	variable.Assign(newValue, true)
+	return nil
+}
+
+// VisitMinusAssign maneja la asignación de resta
+func (v *ReplVisitor) VisitMinusAssign(ctx *parser.MinusAssignContext) interface{} {
+	id := ctx.Id_pattern().GetText()
+	variable := v.ScopeTrace.GetVariable(id)
+	if variable == nil {
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), "Variable '"+id+"' no encontrada")
+		return nil
+	}
+
+	// Obtenemos el valor actual de la variable
+	currentValue := variable.Value.Copy()
+
+	// Obtenemos el valor a restar
+	valueToSubtract := v.Visit(ctx.Expresion()).(value.IVOR)
+	if valueToSubtract == nil {
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), "Expresión inválida para resta")
+		return nil
+	}
+
+	// Verificamos si el tipo soporta la operación Subtract usando type assertion
+	var newValue value.IVOR
+	var ok bool
+	var msg string
+
+	switch cv := currentValue.(type) {
+	case *value.IntValue:
+		newValue, ok, msg = cv.Subtract(valueToSubtract)
+	case *value.FloatValue:
+		newValue, ok, msg = cv.Subtract(valueToSubtract)
+	default:
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), "Operación '-=' no soportada para "+currentValue.Type())
+		return nil
+	}
+
+	if !ok {
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), msg)
+		return nil
+	}
+
+	// Asignamos el nuevo valor a la variable
+	variable.Assign(newValue, true)
+	return nil
+}
+
+// VisitMulAssign maneja la asignación de multiplicación
+func (v *ReplVisitor) VisitMulAssign(ctx *parser.MulAssignContext) interface{} {
+	id := ctx.Id_pattern().GetText()
+	variable := v.ScopeTrace.GetVariable(id)
+	if variable == nil {
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), "Variable '"+id+"' no encontrada")
+		return nil
+	}
+
+	// Obtenemos el valor actual de la variable
+	currentValue := variable.Value.Copy()
+
+	// Obtenemos el valor a multiplicar
+	valueToMultiply := v.Visit(ctx.Expresion()).(value.IVOR)
+	if valueToMultiply == nil {
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), "Expresión inválida para multiplicación")
+		return nil
+	}
+
+	// Verificamos si el tipo soporta la operación Multiply usando type assertion
+	var newValue value.IVOR
+	var ok bool
+	var msg string
+
+	switch cv := currentValue.(type) {
+	case *value.IntValue:
+		newValue, ok, msg = cv.Multiply(valueToMultiply)
+	case *value.FloatValue:
+		newValue, ok, msg = cv.Multiply(valueToMultiply)
+	default:
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), "Operación '*=' no soportada para "+currentValue.Type())
+		return nil
+	}
+
+	if !ok {
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), msg)
+		return nil
+	}
+
+	// Asignamos el nuevo valor a la variable
+	variable.Assign(newValue, true)
+	return nil
+}
+
+// VisitDivAssign maneja la asignación de división
+func (v *ReplVisitor) VisitDivAssign(ctx *parser.DivAssignContext) interface{} {
+	id := ctx.Id_pattern().GetText()
+	variable := v.ScopeTrace.GetVariable(id)
+	if variable == nil {
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), "Variable '"+id+"' no encontrada")
+		return nil
+	}
+
+	// Obtenemos el valor actual de la variable
+	currentValue := variable.Value.Copy()
+
+	// Obtenemos el valor a dividir
+	valueToDivide := v.Visit(ctx.Expresion()).(value.IVOR)
+	if valueToDivide == nil {
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), "Expresión inválida para división")
+		return nil
+	}
+
+	// Verificamos si el tipo soporta la operación Divide usando type assertion
+	var newValue value.IVOR
+	var ok bool
+	var msg string
+
+	switch cv := currentValue.(type) {
+	case *value.IntValue:
+		newValue, ok, msg = cv.Divide(valueToDivide)
+	case *value.FloatValue:
+		newValue, ok, msg = cv.Divide(valueToDivide)
+	default:
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), "Operación '/=' no soportada para "+currentValue.Type())
+		return nil
+	}
+
+	if !ok {
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), msg)
+		return nil
+	}
+
+	// Asignamos el nuevo valor a la variable
+	variable.Assign(newValue, true)
+	return nil
+}
+
+// VisitModAssign maneja la asignación de módulo
+func (v *ReplVisitor) VisitModAssign(ctx *parser.ModAssignContext) interface{} {
+	id := ctx.Id_pattern().GetText()
+	variable := v.ScopeTrace.GetVariable(id)
+	if variable == nil {
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), "Variable '"+id+"' no encontrada")
+		return nil
+	}
+
+	// Obtenemos el valor actual de la variable
+	currentValue := variable.Value.Copy()
+
+	// Obtenemos el valor a aplicar el módulo
+	valueToMod := v.Visit(ctx.Expresion()).(value.IVOR)
+	if valueToMod == nil {
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), "Expresión inválida para módulo")
+		return nil
+	}
+
+	// Verificamos si el tipo soporta la operación Mod usando type assertion
+	var newValue value.IVOR
+	var ok bool
+	var msg string
+
+	switch cv := currentValue.(type) {
+	case *value.IntValue:
+		newValue, ok, msg = cv.Mod(valueToMod)
+	default:
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), "Operación '%=' no soportada para "+currentValue.Type())
+		return nil
+	}
+
+	if !ok {
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), msg)
+		return nil
+	}
+
+	// Asignamos el nuevo valor a la variable
+	variable.Assign(newValue, true)
+	return nil
+}
+
+// VisitWhileStmt maneja el nodo WhileStmt
+func (v *ReplVisitor) VisitWhileStmt(ctx *parser.WhileStmtContext) interface{} {
+	// Obtenemos la condición del while
+	condition := v.Visit(ctx.Expresion()).(value.IVOR)
+
+	if condition.Type() != value.IVOR_BOOL {
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), "La condición del while debe ser un booleano")
+		return nil
+	}
+
+	// Mientras la condición sea verdadera, ejecutamos el bloque
+	for condition.(*value.BoolValue).InternalValue {
+		// Push scope para el while
+		v.ScopeTrace.PushScope("while")
+
+		for _, stmt := range ctx.AllStmt() {
+			v.Visit(stmt)
+		}
+
+		// Pop scope del while
+		v.ScopeTrace.PopScope()
+
+		// Re-evaluamos la condición
+		condition = v.Visit(ctx.Expresion()).(value.IVOR)
+		if condition.Type() != value.IVOR_BOOL {
+			v.ErrorTable.NewSemanticError(ctx.GetStart(), "La condición del while debe ser un booleano")
+			return nil
+		}
+	}
+
 	return nil
 }

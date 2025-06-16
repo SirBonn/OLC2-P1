@@ -61,6 +61,21 @@ type VlangListener interface {
 	// EnterDirectAssign is called when entering the DirectAssign production.
 	EnterDirectAssign(c *DirectAssignContext)
 
+	// EnterPlusAssign is called when entering the PlusAssign production.
+	EnterPlusAssign(c *PlusAssignContext)
+
+	// EnterMinusAssign is called when entering the MinusAssign production.
+	EnterMinusAssign(c *MinusAssignContext)
+
+	// EnterMulAssign is called when entering the MulAssign production.
+	EnterMulAssign(c *MulAssignContext)
+
+	// EnterDivAssign is called when entering the DivAssign production.
+	EnterDivAssign(c *DivAssignContext)
+
+	// EnterModAssign is called when entering the ModAssign production.
+	EnterModAssign(c *ModAssignContext)
+
 	// EnterDeclAssign is called when entering the DeclAssign production.
 	EnterDeclAssign(c *DeclAssignContext)
 
@@ -75,6 +90,9 @@ type VlangListener interface {
 
 	// EnterUnario is called when entering the unario production.
 	EnterUnario(c *UnarioContext)
+
+	// EnterAsignacionExpr is called when entering the asignacionExpr production.
+	EnterAsignacionExpr(c *AsignacionExprContext)
 
 	// EnterParentesisexpre is called when entering the parentesisexpre production.
 	EnterParentesisexpre(c *ParentesisexpreContext)
@@ -232,6 +250,21 @@ type VlangListener interface {
 	// ExitDirectAssign is called when exiting the DirectAssign production.
 	ExitDirectAssign(c *DirectAssignContext)
 
+	// ExitPlusAssign is called when exiting the PlusAssign production.
+	ExitPlusAssign(c *PlusAssignContext)
+
+	// ExitMinusAssign is called when exiting the MinusAssign production.
+	ExitMinusAssign(c *MinusAssignContext)
+
+	// ExitMulAssign is called when exiting the MulAssign production.
+	ExitMulAssign(c *MulAssignContext)
+
+	// ExitDivAssign is called when exiting the DivAssign production.
+	ExitDivAssign(c *DivAssignContext)
+
+	// ExitModAssign is called when exiting the ModAssign production.
+	ExitModAssign(c *ModAssignContext)
+
 	// ExitDeclAssign is called when exiting the DeclAssign production.
 	ExitDeclAssign(c *DeclAssignContext)
 
@@ -246,6 +279,9 @@ type VlangListener interface {
 
 	// ExitUnario is called when exiting the unario production.
 	ExitUnario(c *UnarioContext)
+
+	// ExitAsignacionExpr is called when exiting the asignacionExpr production.
+	ExitAsignacionExpr(c *AsignacionExprContext)
 
 	// ExitParentesisexpre is called when exiting the parentesisexpre production.
 	ExitParentesisexpre(c *ParentesisexpreContext)

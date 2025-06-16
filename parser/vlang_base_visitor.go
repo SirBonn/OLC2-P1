@@ -79,6 +79,26 @@ func (v *BaseVlangVisitor) VisitDirectAssign(ctx *DirectAssignContext) interface
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseVlangVisitor) VisitPlusAssign(ctx *PlusAssignContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseVlangVisitor) VisitMinusAssign(ctx *MinusAssignContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseVlangVisitor) VisitMulAssign(ctx *MulAssignContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseVlangVisitor) VisitDivAssign(ctx *DivAssignContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseVlangVisitor) VisitModAssign(ctx *ModAssignContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseVlangVisitor) VisitDeclAssign(ctx *DeclAssignContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -96,6 +116,10 @@ func (v *BaseVlangVisitor) VisitFuncionexpre(ctx *FuncionexpreContext) interface
 }
 
 func (v *BaseVlangVisitor) VisitUnario(ctx *UnarioContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseVlangVisitor) VisitAsignacionExpr(ctx *AsignacionExprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

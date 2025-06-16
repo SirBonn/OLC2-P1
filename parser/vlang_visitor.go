@@ -61,6 +61,21 @@ type VlangVisitor interface {
 	// Visit a parse tree produced by VlangParser#DirectAssign.
 	VisitDirectAssign(ctx *DirectAssignContext) interface{}
 
+	// Visit a parse tree produced by VlangParser#PlusAssign.
+	VisitPlusAssign(ctx *PlusAssignContext) interface{}
+
+	// Visit a parse tree produced by VlangParser#MinusAssign.
+	VisitMinusAssign(ctx *MinusAssignContext) interface{}
+
+	// Visit a parse tree produced by VlangParser#MulAssign.
+	VisitMulAssign(ctx *MulAssignContext) interface{}
+
+	// Visit a parse tree produced by VlangParser#DivAssign.
+	VisitDivAssign(ctx *DivAssignContext) interface{}
+
+	// Visit a parse tree produced by VlangParser#ModAssign.
+	VisitModAssign(ctx *ModAssignContext) interface{}
+
 	// Visit a parse tree produced by VlangParser#DeclAssign.
 	VisitDeclAssign(ctx *DeclAssignContext) interface{}
 
@@ -75,6 +90,9 @@ type VlangVisitor interface {
 
 	// Visit a parse tree produced by VlangParser#unario.
 	VisitUnario(ctx *UnarioContext) interface{}
+
+	// Visit a parse tree produced by VlangParser#asignacionExpr.
+	VisitAsignacionExpr(ctx *AsignacionExprContext) interface{}
 
 	// Visit a parse tree produced by VlangParser#parentesisexpre.
 	VisitParentesisexpre(ctx *ParentesisexpreContext) interface{}

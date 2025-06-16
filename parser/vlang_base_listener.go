@@ -128,6 +128,36 @@ func (s *BaseVlangListener) EnterDirectAssign(ctx *DirectAssignContext) {}
 // ExitDirectAssign is called when production DirectAssign is exited.
 func (s *BaseVlangListener) ExitDirectAssign(ctx *DirectAssignContext) {}
 
+// EnterPlusAssign is called when production PlusAssign is entered.
+func (s *BaseVlangListener) EnterPlusAssign(ctx *PlusAssignContext) {}
+
+// ExitPlusAssign is called when production PlusAssign is exited.
+func (s *BaseVlangListener) ExitPlusAssign(ctx *PlusAssignContext) {}
+
+// EnterMinusAssign is called when production MinusAssign is entered.
+func (s *BaseVlangListener) EnterMinusAssign(ctx *MinusAssignContext) {}
+
+// ExitMinusAssign is called when production MinusAssign is exited.
+func (s *BaseVlangListener) ExitMinusAssign(ctx *MinusAssignContext) {}
+
+// EnterMulAssign is called when production MulAssign is entered.
+func (s *BaseVlangListener) EnterMulAssign(ctx *MulAssignContext) {}
+
+// ExitMulAssign is called when production MulAssign is exited.
+func (s *BaseVlangListener) ExitMulAssign(ctx *MulAssignContext) {}
+
+// EnterDivAssign is called when production DivAssign is entered.
+func (s *BaseVlangListener) EnterDivAssign(ctx *DivAssignContext) {}
+
+// ExitDivAssign is called when production DivAssign is exited.
+func (s *BaseVlangListener) ExitDivAssign(ctx *DivAssignContext) {}
+
+// EnterModAssign is called when production ModAssign is entered.
+func (s *BaseVlangListener) EnterModAssign(ctx *ModAssignContext) {}
+
+// ExitModAssign is called when production ModAssign is exited.
+func (s *BaseVlangListener) ExitModAssign(ctx *ModAssignContext) {}
+
 // EnterDeclAssign is called when production DeclAssign is entered.
 func (s *BaseVlangListener) EnterDeclAssign(ctx *DeclAssignContext) {}
 
@@ -157,6 +187,12 @@ func (s *BaseVlangListener) EnterUnario(ctx *UnarioContext) {}
 
 // ExitUnario is called when production unario is exited.
 func (s *BaseVlangListener) ExitUnario(ctx *UnarioContext) {}
+
+// EnterAsignacionExpr is called when production asignacionExpr is entered.
+func (s *BaseVlangListener) EnterAsignacionExpr(ctx *AsignacionExprContext) {}
+
+// ExitAsignacionExpr is called when production asignacionExpr is exited.
+func (s *BaseVlangListener) ExitAsignacionExpr(ctx *AsignacionExprContext) {}
 
 // EnterParentesisexpre is called when production parentesisexpre is entered.
 func (s *BaseVlangListener) EnterParentesisexpre(ctx *ParentesisexpreContext) {}

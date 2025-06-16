@@ -86,6 +86,11 @@ transfer_stmt:
 
 assign_stmt:
 	id_pattern ASSIGN expresion  	# DirectAssign
+    | id_pattern PLUS_ASSIGN expresion      # PlusAssign
+    | id_pattern MINUS_ASSIGN expresion     # MinusAssign
+    | id_pattern MUL_ASSIGN expresion       # MulAssign
+    | id_pattern DIV_ASSIGN expresion       # DivAssign
+    | id_pattern MOD_ASSIGN expresion       # ModAssign
     ; 
 
 decl_stmt: 
@@ -99,6 +104,7 @@ id_pattern: ID (DOT ID)* # IdPattern;
 expresion
     : valor                                                #valorexpresion        
     | func_call                                            #funcionexpre
+    | assign_stmt                                          #asignacionExpr
     | LPAREN expresion RPAREN                              #parentesisexpre
     | LBRACK expresion (COMMA expresion)* RBRACK           #arrayexpre
     | op=(NOT | MINUS) expresion                           #unario
@@ -225,7 +231,7 @@ FLOAT    : [0-9]+ '.' [0-9]* | [0-9]* '.' [0-9]+ ;
 DECIMAL  : [0-9]+ '.' [0-9]+ ;
 CADENA   : '"' (~["\\] | '\\' .)* '"' ;
 CARACTER : '\'' . '\'' ;
-STRING_INTERPOLATION : '"' (~["\\$] | '\\' . | '$' ~[{] | '$' '{' (~[}])* '}')* '"' | '\'' (~["\\$] | '\\' . | '$' ~[{] | '$' '{' (~[}])* '}')* '\'' ;
+STRING_INTERPOLATION : '"' (~["\\$] | '\\' . | '$' ~[{] | '$' '{' (~[}])* '}')* '"' ;
 
 // === Identificadores ===
 
@@ -258,6 +264,11 @@ GE      : '>=' ;
 ASSIGN  : '=' ;
 INC     : '++' ;
 DEC     : '--' ;
+PLUS_ASSIGN : '+=' ;
+MINUS_ASSIGN : '-=' ;
+MUL_ASSIGN : '*=' ;
+DIV_ASSIGN : '/=' ;
+MOD_ASSIGN : '%=' ;
 COLON  : ':' ;
 
 // === Símbolos ===

@@ -1,4 +1,3 @@
-// ast/nodes.go, unica estructura que tengo para el ast
 package ast
 
 // Interfaces base
@@ -28,6 +27,11 @@ type Visitor interface {
 	VisitPrintStmt(node *PrintStmt) interface{}
 	VisitVarDecl(node *VarDecl) interface{}
 	VisitAssignment(node *Assignment) interface{}
+	VisitPlusAssign(node *PlusAssign) interface{}
+	VisitMinusAssign(node *MinusAssign) interface{} // AGREGAR
+	VisitMulAssign(node *MulAssign) interface{}     // AGREGAR
+	VisitDivAssign(node *DivAssign) interface{}     // AGREGAR
+	VisitModAssign(node *ModAssign) interface{}     // AGREGAR
 	VisitIfStmt(node *IfStmt) interface{}
 	VisitForStmt(node *ForStmt) interface{}
 	VisitWhileStmt(node *WhileStmt) interface{}
@@ -89,6 +93,7 @@ func (l *Literal) GetColumn() int               { return l.Column }
 
 type Identifier struct {
 	Name   string
+	Parts  []string // Para manejar acceso a campos (ej: "objeto.campo")
 	Line   int
 	Column int
 }
@@ -149,10 +154,71 @@ func (a *Assignment) IsStatement()                 {}
 func (a *Assignment) GetLine() int                 { return a.Line }
 func (a *Assignment) GetColumn() int               { return a.Column }
 
+type PlusAssign struct {
+	Target Expression // Identifier o acceso a campo
+	Value  Expression
+	Line   int
+	Column int
+}
+
+func (p *PlusAssign) Accept(v Visitor) interface{} { return v.VisitPlusAssign(p) }
+func (p *PlusAssign) IsStatement()                 {}
+func (p *PlusAssign) GetLine() int                 { return p.Line }
+func (p *PlusAssign) GetColumn() int               { return p.Column }
+
+type MinusAssign struct {
+	Target Expression
+	Value  Expression
+	Line   int
+	Column int
+}
+
+func (m *MinusAssign) Accept(v Visitor) interface{} { return v.VisitMinusAssign(m) }
+func (m *MinusAssign) IsStatement()                 {}
+func (m *MinusAssign) GetLine() int                 { return m.Line }
+func (m *MinusAssign) GetColumn() int               { return m.Column }
+
+type MulAssign struct {
+	Target Expression
+	Value  Expression
+	Line   int
+	Column int
+}
+
+func (m *MulAssign) Accept(v Visitor) interface{} { return v.VisitMulAssign(m) }
+func (m *MulAssign) IsStatement()                 {}
+func (m *MulAssign) GetLine() int                 { return m.Line }
+func (m *MulAssign) GetColumn() int               { return m.Column }
+
+type DivAssign struct {
+	Target Expression
+	Value  Expression
+	Line   int
+	Column int
+}
+
+func (d *DivAssign) Accept(v Visitor) interface{} { return v.VisitDivAssign(d) }
+func (d *DivAssign) IsStatement()                 {}
+func (d *DivAssign) GetLine() int                 { return d.Line }
+func (d *DivAssign) GetColumn() int               { return d.Column }
+
+type ModAssign struct {
+	Target Expression
+	Value  Expression
+	Line   int
+	Column int
+}
+
+func (m *ModAssign) Accept(v Visitor) interface{} { return v.VisitModAssign(m) }
+func (m *ModAssign) IsStatement()                 {}
+func (m *ModAssign) GetLine() int                 { return m.Line }
+func (m *ModAssign) GetColumn() int               { return m.Column }
+
 type IfStmt struct {
 	Condition  Expression
 	ThenBranch []Statement
 	ElseBranch []Statement // puede ser vacío
+	ElseIf     *IfStmt     // Para else if
 	Line       int
 	Column     int
 }
@@ -163,11 +229,18 @@ func (i *IfStmt) GetLine() int                 { return i.Line }
 func (i *IfStmt) GetColumn() int               { return i.Column }
 
 type ForStmt struct {
-	Variable string
-	Iterable Expression
-	Body     []Statement
-	Line     int
-	Column   int
+	Variable  string
+	InKeyword bool
+	Iterable  Expression
+	Range     *Range // Opcional
+	Body      []Statement
+	Line      int
+	Column    int
+}
+
+type Range struct {
+	Start Expression
+	End   Expression
 }
 
 func (f *ForStmt) Accept(v Visitor) interface{} { return v.VisitForStmt(f) }

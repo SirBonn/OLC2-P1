@@ -3,7 +3,6 @@ package main
 import (
 	"compiler/errors"
 	parser "compiler/parser"
-	"compiler/repl"
 	"fmt"
 
 	// "go/ast"
@@ -174,24 +173,18 @@ func (ide *IDE) runCode() {
 	lexer := parser.NewVlangLexer(antlr.NewInputStream(code))
 	lexer.RemoveErrorListeners()
 	lexer.AddErrorListener(lexicalErrs)
-
 	tokens := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
 
 	// === FASE 2: ANÁLISIS SINTÁCTICO ===
 	p := parser.NewVlangParser(tokens)
 	p.BuildParseTrees = true
-
 	syntaxErrs := errors.NewSyntaxErrorListener(lexicalErrs.ErrorTable)
 	p.RemoveErrorListeners()
 	p.AddErrorListener(syntaxErrs)
-
-	// tree es el CST (Concrete Syntax Tree) de ANTLR
 	tree := p.Programa()
 
-	// Combinar errores
 	ide.errorTable = lexicalErrs.ErrorTable
 
-	// Si hay errores léxicos o sintácticos, mostrar y detener
 	if ide.errorTable.HasErrors() {
 		ide.showErrors()
 		return
@@ -202,62 +195,30 @@ func (ide *IDE) runCode() {
 	// === FASE 3: CONSTRUCCIÓN DEL AST ===
 	ide.outputEntry.SetText(ide.outputEntry.Text + "🔨 Construyendo AST...\n")
 
-	// Crear el builder del AST
 	astBuilder := NewASTBuilder()
+	astProgram, err := astBuilder.Build(tree)
 
-	// Construir el AST visitando el CST
-	astResult := astBuilder.Visit(tree)
-	if astResult != nil {
-		ide.astRoot = astResult.(ast.Node)
-		ide.outputEntry.SetText(ide.outputEntry.Text + "✅ AST construido exitosamente\n")
-	} else {
-		ide.outputEntry.SetText(ide.outputEntry.Text + "❌ Error al construir el AST\n")
+	if err != nil {
+		ide.outputEntry.SetText(ide.outputEntry.Text + fmt.Sprintf("❌ Error al construir el AST: %v\n", err))
 		return
 	}
 
-	// === FASE 4: ANÁLISIS SEMÁNTICO (si ya lo tienes implementado) ===
-	/*
-	   ide.outputEntry.SetText(ide.outputEntry.Text + "🔍 Realizando análisis semántico...\n")
+	ide.outputEntry.SetText(ide.outputEntry.Text + "✅ AST construido exitosamente\n")
 
-	   semanticAnalyzer := semantic.NewSemanticAnalyzer()
-	   semanticErrors := semanticAnalyzer.Analyze(ide.astRoot.(*ast.Program))
-
-	   // Agregar errores semánticos a la tabla
-	   for _, err := range semanticErrors {
-	       ide.errorTable.AddError(err)
-	   }
-
-	   // Guardar la tabla de símbolos
-	   ide.symbolTable = semanticAnalyzer.GetSymbolTable()
-
-	   // Si hay errores semánticos, mostrar y detener
-	   if ide.errorTable.HasErrors() {
-	       ide.showErrors()
-	       return
-	   }
-
-	   ide.outputEntry.SetText(ide.outputEntry.Text + "✅ Análisis semántico completado\n")
-	*/
-
-	// === FASE 5: INTERPRETACIÓN ===
+	// === FASE 4: INTERPRETACIÓN ===
 	ide.outputEntry.SetText(ide.outputEntry.Text + "\n🚀 Ejecutando programa...\n")
 	ide.outputEntry.SetText(ide.outputEntry.Text + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
 
-	// Por ahora, usar tu visitor existente con el CST
-	// Cuando tengas el intérprete del AST listo, cambiar a:
-	// interpreter := repl.NewInterpreter()
-	// output := interpreter.Execute(ide.astRoot)
+	interpreter := ast.NewInterpreter()
+	output, err := interpreter.Interpret(astProgram)
 
-	// Temporalmente, seguir usando el visitor del CST
-	visitor := repl.NewReplVisitor(repl.NewErrorTable())
-	// result := visitor.Visit(tree)
-
-	// Mostrar la salida
-	if visitor.Console != nil {
-		output := visitor.Console.GetOutput()
-		ide.outputEntry.SetText(ide.outputEntry.Text + output)
+	if err != nil {
+		ide.outputEntry.SetText(ide.outputEntry.Text + fmt.Sprintf("❌ Error durante la ejecución: %v\n", err))
+		ide.outputEntry.SetText(ide.outputEntry.Text + "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+		return
 	}
 
+	ide.outputEntry.SetText(ide.outputEntry.Text + output)
 	ide.outputEntry.SetText(ide.outputEntry.Text + "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 	ide.outputEntry.SetText(ide.outputEntry.Text + "✅ Ejecución completada\n")
 }

@@ -46,3 +46,12 @@ func (et *ErrorTable) NewRuntimeError(line int, column int, msg string) {
 func NewErrorTable() *ErrorTable {
 	return &ErrorTable{}
 }
+
+func (et *ErrorTable) HasErrors() bool {
+	return len(et.Errors) > 0
+}
+
+// getErrors
+func (et *ErrorTable) GetErrors() []Error {
+	return et.Errors
+}

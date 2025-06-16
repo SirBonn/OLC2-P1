@@ -1,7 +1,7 @@
 package main
 
 import (
-	"compiler/ast"
+	ast "compiler/ast"
 	parser "compiler/parser"
 	"fmt"
 	"strconv"
@@ -79,6 +79,16 @@ func (b *ASTBuilder) visitStmt(ctx *parser.StmtContext) ast.Statement {
 		return b.visitDeclAssign(node)
 	case *parser.DirectAssignContext:
 		return b.visitDirectAssign(node)
+	case *parser.PlusAssignContext: // AGREGAR ESTE CASO
+		return b.visitPlusAssign(node)
+	case *parser.MinusAssignContext: // AGREGAR
+		return b.visitMinusAssign(node)
+	case *parser.MulAssignContext: // AGREGAR
+		return b.visitMulAssign(node)
+	case *parser.DivAssignContext: // AGREGAR
+		return b.visitDivAssign(node)
+	case *parser.ModAssignContext: // AGREGAR
+		return b.visitModAssign(node)
 	case *parser.IfStmtContext:
 		return b.visitIfStmt(node)
 	case *parser.WhileStmtContext:
@@ -88,10 +98,8 @@ func (b *ASTBuilder) visitStmt(ctx *parser.StmtContext) ast.Statement {
 	case *parser.FuncDeclContext:
 		return b.visitFuncDecl(node)
 	case *parser.FuncCallContext:
-		// Las llamadas a función pueden ser statements
 		_ = b.visitFuncCall(node)
-		// Aquí podrías crear un ExpressionStatement si lo necesitas
-		return nil // Por ahora, ignoramos las llamadas como statements
+		return nil
 	case *parser.StructDeclContext:
 		return b.visitStructDecl(node)
 	case *parser.ReturnStmtContext:
@@ -105,7 +113,6 @@ func (b *ASTBuilder) visitStmt(ctx *parser.StmtContext) ast.Statement {
 		return nil
 	}
 }
-
 func (b *ASTBuilder) visitIfStmt(ctx *parser.IfStmtContext) ast.Statement {
 	// Obtener la primera cadena if con type assertion
 	firstChain := ctx.If_chain(0)
@@ -593,6 +600,66 @@ func (b *ASTBuilder) visitValorCaracter(ctx *parser.ValorCaracterContext) ast.Ex
 	return &ast.Literal{
 		Value:  "",
 		Type:   "char",
+		Line:   ctx.GetStart().GetLine(),
+		Column: ctx.GetStart().GetColumn(),
+	}
+}
+
+func (b *ASTBuilder) visitPlusAssign(ctx *parser.PlusAssignContext) ast.Statement {
+	target := b.visitIdPattern(ctx.Id_pattern())
+	value := b.visitExpresion(ctx.Expresion())
+
+	return &ast.PlusAssign{
+		Target: target,
+		Value:  value,
+		Line:   ctx.GetStart().GetLine(),
+		Column: ctx.GetStart().GetColumn(),
+	}
+}
+
+func (b *ASTBuilder) visitMinusAssign(ctx *parser.MinusAssignContext) ast.Statement {
+	target := b.visitIdPattern(ctx.Id_pattern())
+	value := b.visitExpresion(ctx.Expresion())
+
+	return &ast.MinusAssign{
+		Target: target,
+		Value:  value,
+		Line:   ctx.GetStart().GetLine(),
+		Column: ctx.GetStart().GetColumn(),
+	}
+}
+
+func (b *ASTBuilder) visitMulAssign(ctx *parser.MulAssignContext) ast.Statement {
+	target := b.visitIdPattern(ctx.Id_pattern())
+	value := b.visitExpresion(ctx.Expresion())
+
+	return &ast.MulAssign{
+		Target: target,
+		Value:  value,
+		Line:   ctx.GetStart().GetLine(),
+		Column: ctx.GetStart().GetColumn(),
+	}
+}
+
+func (b *ASTBuilder) visitDivAssign(ctx *parser.DivAssignContext) ast.Statement {
+	target := b.visitIdPattern(ctx.Id_pattern())
+	value := b.visitExpresion(ctx.Expresion())
+
+	return &ast.DivAssign{
+		Target: target,
+		Value:  value,
+		Line:   ctx.GetStart().GetLine(),
+		Column: ctx.GetStart().GetColumn(),
+	}
+}
+
+func (b *ASTBuilder) visitModAssign(ctx *parser.ModAssignContext) ast.Statement {
+	target := b.visitIdPattern(ctx.Id_pattern())
+	value := b.visitExpresion(ctx.Expresion())
+
+	return &ast.ModAssign{
+		Target: target,
+		Value:  value,
 		Line:   ctx.GetStart().GetLine(),
 		Column: ctx.GetStart().GetColumn(),
 	}
