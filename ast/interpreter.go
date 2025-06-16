@@ -80,73 +80,149 @@ func NewInterpreter() *Interpreter {
 
 // Interpret ejecuta un programa AST
 func (i *Interpreter) Interpret(program *Program) (string, error) {
+	fmt.Printf("🚀 INICIANDO Interpret\n")
+	fmt.Printf("📊 Programa recibido: %+v\n", program)
+
+	if program == nil {
+		fmt.Printf("❌ ERROR: program es nil\n")
+		return "", fmt.Errorf("program is nil")
+	}
+
+	fmt.Printf("📋 Programa tiene %d statements\n", len(program.Statements))
+
+	// Mostrar TODOS los statements antes de procesarlos
+	for idx, stmt := range program.Statements {
+		fmt.Printf("📄 Statement [%d]: %T = %+v\n", idx, stmt, stmt)
+	}
+
+	fmt.Printf("🔄 FASE 1: Registrando funciones...\n")
+
 	// Primero, registrar todas las funciones
-	for _, stmt := range program.Statements {
+	functionCount := 0
+	for idx, stmt := range program.Statements {
+		fmt.Printf("🔍 Revisando statement [%d] para funciones: %T\n", idx, stmt)
+
 		if funcDecl, ok := stmt.(*FuncDecl); ok {
+			fmt.Printf("✅ Encontrada función: %s\n", funcDecl.Name)
 			i.env.SetFunction(funcDecl.Name, funcDecl)
+			functionCount++
+		} else {
+			fmt.Printf("⏭️  No es función: %T\n", stmt)
 		}
 	}
 
+	fmt.Printf("📊 FASE 1 COMPLETADA: %d funciones registradas\n", functionCount)
+	fmt.Printf("🔄 FASE 2: Ejecutando statements...\n")
+
 	// Luego ejecutar los statements
-	for _, stmt := range program.Statements {
+	statementCount := 0
+	executableCount := 0
+
+	for idx, stmt := range program.Statements {
+		fmt.Printf("🔍 Procesando statement [%d]: %T\n", idx, stmt)
+
 		if _, ok := stmt.(*FuncDecl); ok {
+			fmt.Printf("⏭️  Saltando función [%d] (ya procesada)\n", idx)
 			continue // Ya procesamos las funciones
 		}
 
+		fmt.Printf("🎯 Statement [%d] es ejecutable: %T\n", idx, stmt)
+		executableCount++
+
+		fmt.Printf("🚀 LLAMANDO executeStatement para [%d]...\n", idx)
+
 		err := i.executeStatement(stmt)
 		if err != nil {
+			fmt.Printf("❌ Error en statement [%d]: %v\n", idx, err)
 			return i.output.String(), err
 		}
 
+		statementCount++
+		fmt.Printf("✅ Statement [%d] ejecutado exitosamente\n", idx)
+		fmt.Printf("📝 Output actual: '%s'\n", i.output.String())
+
 		if i.shouldExit {
+			fmt.Printf("🛑 shouldExit=true, terminando en statement [%d]\n", idx)
 			break
 		}
 	}
+
+	fmt.Printf("📊 RESUMEN FINAL:\n")
+	fmt.Printf("   - Total statements: %d\n", len(program.Statements))
+	fmt.Printf("   - Funciones: %d\n", functionCount)
+	fmt.Printf("   - Ejecutables encontrados: %d\n", executableCount)
+	fmt.Printf("   - Ejecutados exitosamente: %d\n", statementCount)
+	fmt.Printf("   - Output final: '%s'\n", i.output.String())
+	fmt.Printf("🏁 INTERPRET COMPLETADO\n")
 
 	return i.output.String(), nil
 }
 
 // executeStatement ejecuta un statement
 func (i *Interpreter) executeStatement(stmt Statement) error {
+
+	fmt.Printf("🎯 executeStatement llamado con: %T\n", stmt)
+
 	if i.shouldExit || i.shouldBreak || i.shouldContinue {
+		fmt.Printf("🛑 Terminando early: exit=%v, break=%v, continue=%v\n",
+			i.shouldExit, i.shouldBreak, i.shouldContinue)
 		return nil
 	}
 
 	switch s := stmt.(type) {
 	case *PrintStmt:
+		fmt.Printf("🖨️  Ejecutando PrintStmt con %d argumentos\n", len(s.Arguments))
 		return i.executePrintStmt(s)
 	case *VarDecl:
+		fmt.Printf("📝 Ejecutando VarDecl: %s\n", s.Name)
 		return i.executeVarDecl(s)
 	case *Assignment:
+		fmt.Printf("🔄 Ejecutando Assignment: %s\n", s.Target)
 		return i.executeAssignment(s)
 	case *PlusAssign:
+		fmt.Printf("➕ Ejecutando PlusAssign: %s\n", s.Target)
 		return i.executePlusAssign(s)
 	case *MinusAssign: // AGREGAR
+		fmt.Printf("➖ Ejecutando MinusAssign: %s\n", s.Target)
 		return i.executeMinusAssign(s)
+
 	case *MulAssign: // AGREGAR
+		fmt.Printf("✖️ Ejecutando MulAssign: %s\n", s.Target)
 		return i.executeMulAssign(s)
 	case *DivAssign: // AGREGAR
+		fmt.Printf("➗ Ejecutando DivAssign: %s\n", s.Target)
 		return i.executeDivAssign(s)
 	case *ModAssign: // AGREGAR
+		fmt.Printf("🔢 Ejecutando ModAssign: %s\n", s.Target)
 		return i.executeModAssign(s)
 	case *IfStmt:
+		fmt.Printf("🔍 Ejecutando IfStmt con condición: %T\n", s.Condition)
 		return i.executeIfStmt(s)
 	case *WhileStmt:
+		fmt.Printf("🔄 Ejecutando WhileStmt con condición: %T\n", s.Condition)
 		return i.executeWhileStmt(s)
 	case *ForStmt:
+		fmt.Printf("🔁 Ejecutando ForStmt con iterable: %T\n", s.Iterable)
 		return i.executeForStmt(s)
 	case *FuncDecl:
+		// Las funciones ya se registraron al inicio del programa
+		fmt.Printf("📜 Función declarada: %s\n", s.Name)
 		// Ya procesado en Interpret
 		return nil
 	case *Return:
+		fmt.Printf("🔙 Ejecutando Return con valor: %T\n", s.Value)
 		return i.executeReturn(s)
 	case *Break:
+		fmt.Println("⏹️ Ejecutando Break")
+		// Marcar que se debe salir del loop actual
 		i.shouldBreak = true
 		return nil
 	case *Continue:
+		fmt.Println("⏩ Ejecutando Continue")
 		i.shouldContinue = true
 		return nil
 	default:
+		fmt.Printf("⚠️  Unhandled statement type: %T\n", s)
 		return fmt.Errorf("unhandled statement type: %T", s)
 	}
 }
