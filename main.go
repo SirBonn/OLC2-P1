@@ -3,12 +3,16 @@ package main
 import (
 	"compiler/errors"
 	parser "compiler/parser"
+	"compiler/repl"
 	"fmt"
+
+	// "go/ast"
 	"io/ioutil"
 	"strings"
 
-	// "compiler/ast"
-	// "compiler/reports"
+	"compiler/ast"
+	"compiler/reports"
+
 	// "compiler/semantic"
 
 	"fyne.io/fyne/v2"
@@ -29,7 +33,7 @@ type IDE struct {
 	// Componentes para reportes
 	errorTable  *errors.ErrorTable
 	symbolTable interface{} // Por ahora interface{}, después será *semantic.SymbolTable
-	astRoot     interface{} // Por ahora interface{}, después será ast.Node
+	astRoot     ast.Node    // Por ahora interface{}, después será ast.Node
 }
 
 func main() {
@@ -166,6 +170,7 @@ func (ide *IDE) runCode() {
 	code := ide.codeEntry.Text
 	ide.outputEntry.SetText("🔄 Compilando...\n\n")
 
+	// === FASE 1: ANÁLISIS LÉXICO ===
 	lexicalErrs := errors.NewLexicalErrorListener()
 	lexer := parser.NewVlangLexer(antlr.NewInputStream(code))
 	lexer.RemoveErrorListeners()
@@ -173,6 +178,7 @@ func (ide *IDE) runCode() {
 
 	tokens := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
 
+	// === FASE 2: ANÁLISIS SINTÁCTICO ===
 	p := parser.NewVlangParser(tokens)
 	p.BuildParseTrees = true
 
@@ -180,20 +186,81 @@ func (ide *IDE) runCode() {
 	p.RemoveErrorListeners()
 	p.AddErrorListener(syntaxErrs)
 
+	// tree es el CST (Concrete Syntax Tree) de ANTLR
 	tree := p.Programa()
 
+	// Combinar errores
 	ide.errorTable = lexicalErrs.ErrorTable
 
+	// Si hay errores léxicos o sintácticos, mostrar y detener
 	if ide.errorTable.HasErrors() {
 		ide.showErrors()
 		return
 	}
 
-	ide.outputEntry.SetText("✅ Análisis léxico y sintáctico completado sin errores\n\n")
-	ide.outputEntry.SetText(ide.outputEntry.Text + "🚧 Interpretación en desarrollo...\n")
+	ide.outputEntry.SetText("✅ Análisis léxico y sintáctico completado\n")
 
-	// TODO: Agregar el resto cuando esté listo
-	_ = tree // Para evitar warning de variable no usada
+	// === FASE 3: CONSTRUCCIÓN DEL AST ===
+	ide.outputEntry.SetText(ide.outputEntry.Text + "🔨 Construyendo AST...\n")
+
+	// Crear el builder del AST
+	astBuilder := NewASTBuilder()
+
+	// Construir el AST visitando el CST
+	astResult := astBuilder.Visit(tree)
+	if astResult != nil {
+		ide.astRoot = astResult.(ast.Node)
+		ide.outputEntry.SetText(ide.outputEntry.Text + "✅ AST construido exitosamente\n")
+	} else {
+		ide.outputEntry.SetText(ide.outputEntry.Text + "❌ Error al construir el AST\n")
+		return
+	}
+
+	// === FASE 4: ANÁLISIS SEMÁNTICO (si ya lo tienes implementado) ===
+	/*
+	   ide.outputEntry.SetText(ide.outputEntry.Text + "🔍 Realizando análisis semántico...\n")
+
+	   semanticAnalyzer := semantic.NewSemanticAnalyzer()
+	   semanticErrors := semanticAnalyzer.Analyze(ide.astRoot.(*ast.Program))
+
+	   // Agregar errores semánticos a la tabla
+	   for _, err := range semanticErrors {
+	       ide.errorTable.AddError(err)
+	   }
+
+	   // Guardar la tabla de símbolos
+	   ide.symbolTable = semanticAnalyzer.GetSymbolTable()
+
+	   // Si hay errores semánticos, mostrar y detener
+	   if ide.errorTable.HasErrors() {
+	       ide.showErrors()
+	       return
+	   }
+
+	   ide.outputEntry.SetText(ide.outputEntry.Text + "✅ Análisis semántico completado\n")
+	*/
+
+	// === FASE 5: INTERPRETACIÓN ===
+	ide.outputEntry.SetText(ide.outputEntry.Text + "\n🚀 Ejecutando programa...\n")
+	ide.outputEntry.SetText(ide.outputEntry.Text + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
+
+	// Por ahora, usar tu visitor existente con el CST
+	// Cuando tengas el intérprete del AST listo, cambiar a:
+	// interpreter := repl.NewInterpreter()
+	// output := interpreter.Execute(ide.astRoot)
+
+	// Temporalmente, seguir usando el visitor del CST
+	visitor := repl.NewReplVisitor(repl.NewErrorTable())
+	// result := visitor.Visit(tree)
+
+	// Mostrar la salida
+	if visitor.Console != nil {
+		output := visitor.Console.GetOutput()
+		ide.outputEntry.SetText(ide.outputEntry.Text + output)
+	}
+
+	ide.outputEntry.SetText(ide.outputEntry.Text + "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	ide.outputEntry.SetText(ide.outputEntry.Text + "✅ Ejecución completada\n")
 }
 
 func (ide *IDE) showErrors() {
@@ -224,15 +291,19 @@ func (ide *IDE) showASTReport() {
 		return
 	}
 
-	// Por ahora, mostrar un mensaje simple
-	dialog.ShowInformation("Reporte AST",
-		"Generación de reporte AST en desarrollo...", ide.window)
+	// Generar el reporte del AST
+	html := reports.GenerateASTReport(ide.astRoot)
 
-	// TODO: Cuando tengas el generador de AST listo:
-	// dot := reports.GenerateASTDot(ide.astRoot)
-	// reports.GenerateASTImage(dot, "ast_report.png")
-	// html := reports.GenerateASTReport(ide.astRoot)
-	// reports.SaveAndOpenReport(html, "ast_report.html")
+	// Guardar el archivo HTML
+	filename := "ast_report.html"
+	reports.SaveAndOpenReport(html, filename)
+
+	// Opcionalmente, generar imagen con Graphviz
+	dot := reports.GenerateASTDot(ide.astRoot)
+	reports.GenerateASTImage(dot, "ast_graph.png")
+
+	dialog.ShowInformation("Reporte AST",
+		"Reporte generado exitosamente en "+filename, ide.window)
 }
 
 func (ide *IDE) showSymbolTableReport() {
@@ -249,4 +320,22 @@ func (ide *IDE) showSymbolTableReport() {
 	// TODO: Cuando tengas el analizador semántico listo:
 	// html := reports.GenerateSymbolTableReport(ide.symbolTable)
 	// reports.SaveAndOpenReport(html, "symbol_table_report.html")
+}
+
+func (ide *IDE) debugPrintAST() {
+	if ide.astRoot == nil {
+		fmt.Println("AST es nil")
+		return
+	}
+
+	// Imprimir tipo del nodo raíz
+	fmt.Printf("AST Root Type: %T\n", ide.astRoot)
+
+	// Si es un Program, imprimir el número de statements
+	if program, ok := ide.astRoot.(*ast.Program); ok {
+		fmt.Printf("Program tiene %d statements\n", len(program.Statements))
+		for i, stmt := range program.Statements {
+			fmt.Printf("  Statement %d: %T\n", i, stmt)
+		}
+	}
 }

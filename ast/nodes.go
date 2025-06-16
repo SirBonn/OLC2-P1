@@ -1,4 +1,4 @@
-// ast/nodes.go
+// ast/nodes.go, unica estructura que tengo para el ast
 package ast
 
 // Interfaces base
