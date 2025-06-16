@@ -62,7 +62,6 @@ func (b *ASTBuilder) VisitPrograma(ctx *parser.ProgramaContext) interface{} {
 	return program
 }
 
-// // visitStmt procesa un statement y retorna el nodo AST correspondiente
 func (b *ASTBuilder) visitStmt(ctx *parser.StmtContext) ast.Statement {
 	if ctx == nil || ctx.GetChildCount() == 0 {
 		return nil
@@ -79,7 +78,7 @@ func (b *ASTBuilder) visitStmt(ctx *parser.StmtContext) ast.Statement {
 		return b.visitDeclAssign(node)
 	case *parser.DirectAssignContext:
 		return b.visitDirectAssign(node)
-	case *parser.PlusAssignContext: // AGREGAR ESTE CASO
+	case *parser.PlusAssignContext:
 		return b.visitPlusAssign(node)
 	case *parser.MinusAssignContext: // AGREGAR
 		return b.visitMinusAssign(node)
@@ -113,6 +112,7 @@ func (b *ASTBuilder) visitStmt(ctx *parser.StmtContext) ast.Statement {
 		return nil
 	}
 }
+
 func (b *ASTBuilder) visitIfStmt(ctx *parser.IfStmtContext) ast.Statement {
 	// Obtener la primera cadena if con type assertion
 	firstChain := ctx.If_chain(0)
@@ -405,6 +405,10 @@ func (b *ASTBuilder) visitExpresion(ctx parser.IExpresionContext) ast.Expression
 		return b.visitBinaryExpr(expr)
 	case *parser.IdContext:
 		return b.visitIdExpr(expr)
+	case *parser.ArrayexpreContext: // ESTE ES EL CASO QUE FALTA
+		return b.visitArrayExpr(expr)
+	case *parser.AsignacionExprContext: // Si tienes asignaciones como expresiones
+		return b.visitAssignmentExpr(expr)
 	default:
 		b.addError(fmt.Sprintf("unhandled expression type: %T", expr))
 		return nil
@@ -663,6 +667,32 @@ func (b *ASTBuilder) visitModAssign(ctx *parser.ModAssignContext) ast.Statement 
 		Line:   ctx.GetStart().GetLine(),
 		Column: ctx.GetStart().GetColumn(),
 	}
+}
+
+func (b *ASTBuilder) visitArrayExpr(ctx *parser.ArrayexpreContext) ast.Expression {
+	elements := make([]ast.Expression, 0)
+
+	// Iterar sobre todos los elementos del array
+	for _, exprCtx := range ctx.AllExpresion() {
+		element := b.visitExpresion(exprCtx)
+		if element != nil {
+			elements = append(elements, element)
+		}
+	}
+
+	return &ast.ArrayLiteral{
+		Elements: elements,
+		Line:     ctx.GetStart().GetLine(),
+		Column:   ctx.GetStart().GetColumn(),
+	}
+}
+
+// Si tienes asignaciones como expresiones, también agregar esta función
+func (b *ASTBuilder) visitAssignmentExpr(ctx *parser.AsignacionExprContext) ast.Expression {
+	// Esto dependería de cómo esté estructurada tu gramática para asignaciones como expresiones
+	// Por ahora, retornar nil o manejar según tu caso específico
+	b.addError("assignment expressions not yet implemented")
+	return nil
 }
 
 // === HELPER METHODS ===

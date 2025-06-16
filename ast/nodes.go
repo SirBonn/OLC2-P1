@@ -42,6 +42,7 @@ type Visitor interface {
 	VisitContinue(node *Continue) interface{}
 	VisitStructDecl(node *StructDecl) interface{}
 	VisitStructInstance(node *StructInstance) interface{}
+	VisitArrayLiteral(node *ArrayLiteral) interface{}
 }
 
 // === PROGRAMA ===
@@ -339,3 +340,14 @@ func (s *StructInstance) Accept(v Visitor) interface{} { return v.VisitStructIns
 func (s *StructInstance) IsExpression()                {}
 func (s *StructInstance) GetLine() int                 { return s.Line }
 func (s *StructInstance) GetColumn() int               { return s.Column }
+
+type ArrayLiteral struct {
+	Elements []Expression
+	Line     int
+	Column   int
+}
+
+func (a *ArrayLiteral) Accept(v Visitor) interface{} { return v.VisitArrayLiteral(a) }
+func (a *ArrayLiteral) IsExpression()                {}
+func (a *ArrayLiteral) GetLine() int                 { return a.Line }
+func (a *ArrayLiteral) GetColumn() int               { return a.Column }

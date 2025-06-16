@@ -344,23 +344,20 @@ func (i *Interpreter) evaluateExpression(expr Expression) (Value, error) {
 	switch e := expr.(type) {
 	case *Literal:
 		return Value{Value: e.Value, Type: e.Type}, nil
-
 	case *Identifier:
 		value, exists := i.env.Get(e.Name)
 		if !exists {
 			return Value{}, fmt.Errorf("undefined variable: %s", e.Name)
 		}
 		return value, nil
-
 	case *BinaryExpr:
 		return i.evaluateBinaryExpr(e)
-
 	case *UnaryExpr:
 		return i.evaluateUnaryExpr(e)
-
 	case *FuncCall:
 		return i.evaluateFuncCall(e)
-
+	case *ArrayLiteral: // ESTE CASO DEBE ESTAR
+		return i.evaluateArrayLiteral(e)
 	default:
 		return Value{}, fmt.Errorf("unhandled expression type: %T", e)
 	}
@@ -816,4 +813,19 @@ func (i *Interpreter) executeModAssign(stmt *ModAssign) error {
 	}
 
 	return fmt.Errorf("unsupported modulo assign target: %T", stmt.Target)
+}
+
+// Y la función evaluateArrayLiteral:
+func (i *Interpreter) evaluateArrayLiteral(expr *ArrayLiteral) (Value, error) {
+	elements := make([]interface{}, len(expr.Elements))
+
+	for idx, elementExpr := range expr.Elements {
+		value, err := i.evaluateExpression(elementExpr)
+		if err != nil {
+			return Value{}, err
+		}
+		elements[idx] = value.Value
+	}
+
+	return Value{Value: elements, Type: "array"}, nil
 }

@@ -213,12 +213,15 @@ func (ide *IDE) runCode() {
 	output, err := interpreter.Interpret(astProgram)
 
 	if err != nil {
-		ide.outputEntry.SetText(ide.outputEntry.Text + fmt.Sprintf("❌ Error durante la ejecución: %v\n", err))
+		errorMsg := fmt.Sprintf("❌ Error durante la ejecución: %v\n", err)
+		ide.outputEntry.SetText(ide.outputEntry.Text + errorMsg)
+		fmt.Print(errorMsg) // También mostrar en terminal
 		ide.outputEntry.SetText(ide.outputEntry.Text + "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 		return
 	}
 
 	ide.outputEntry.SetText(ide.outputEntry.Text + output)
+	fmt.Print(output)
 	ide.outputEntry.SetText(ide.outputEntry.Text + "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 	ide.outputEntry.SetText(ide.outputEntry.Text + "✅ Ejecución completada\n")
 }
