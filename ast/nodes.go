@@ -28,10 +28,10 @@ type Visitor interface {
 	VisitVarDecl(node *VarDecl) interface{}
 	VisitAssignment(node *Assignment) interface{}
 	VisitPlusAssign(node *PlusAssign) interface{}
-	VisitMinusAssign(node *MinusAssign) interface{} // AGREGAR
-	VisitMulAssign(node *MulAssign) interface{}     // AGREGAR
-	VisitDivAssign(node *DivAssign) interface{}     // AGREGAR
-	VisitModAssign(node *ModAssign) interface{}     // AGREGAR
+	VisitMinusAssign(node *MinusAssign) interface{}
+	VisitMulAssign(node *MulAssign) interface{}
+	VisitDivAssign(node *DivAssign) interface{}
+	VisitModAssign(node *ModAssign) interface{}
 	VisitIfStmt(node *IfStmt) interface{}
 	VisitForStmt(node *ForStmt) interface{}
 	VisitWhileStmt(node *WhileStmt) interface{}
@@ -43,6 +43,7 @@ type Visitor interface {
 	VisitStructDecl(node *StructDecl) interface{}
 	VisitStructInstance(node *StructInstance) interface{}
 	VisitArrayLiteral(node *ArrayLiteral) interface{}
+	VisitExpressionStatement(node *ExpressionStatement) interface{}
 }
 
 // === PROGRAMA ===
@@ -351,3 +352,17 @@ func (a *ArrayLiteral) Accept(v Visitor) interface{} { return v.VisitArrayLitera
 func (a *ArrayLiteral) IsExpression()                {}
 func (a *ArrayLiteral) GetLine() int                 { return a.Line }
 func (a *ArrayLiteral) GetColumn() int               { return a.Column }
+
+type ExpressionStatement struct {
+	Expression Expression
+	Line       int
+	Column     int
+}
+
+func (e *ExpressionStatement) IsStatement()   {}
+func (e *ExpressionStatement) GetLine() int   { return e.Line }
+func (e *ExpressionStatement) GetColumn() int { return e.Column }
+
+func (e *ExpressionStatement) Accept(v Visitor) interface{} {
+	return v.VisitExpressionStatement(e)
+}

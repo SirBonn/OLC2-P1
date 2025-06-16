@@ -46,13 +46,13 @@ func (b *ASTBuilder) Visit(tree antlr.ParseTree) interface{} {
 	return tree.Accept(b)
 }
 
-// // VisitPrograma construye el nodo Program del AST
+// VisitPrograma construye el nodo Program del AST
 func (b *ASTBuilder) VisitPrograma(ctx *parser.ProgramaContext) interface{} {
 	program := &ast.Program{
 		Statements: make([]ast.Statement, 0),
 	}
 
-	// 	// Visitar todos los statements
+	// Visitar todos los statements
 	for _, stmtCtx := range ctx.AllStmt() {
 		if stmt := b.visitStmt(stmtCtx.(*parser.StmtContext)); stmt != nil {
 			program.Statements = append(program.Statements, stmt)
@@ -80,13 +80,13 @@ func (b *ASTBuilder) visitStmt(ctx *parser.StmtContext) ast.Statement {
 		return b.visitDirectAssign(node)
 	case *parser.PlusAssignContext:
 		return b.visitPlusAssign(node)
-	case *parser.MinusAssignContext: // AGREGAR
+	case *parser.MinusAssignContext:
 		return b.visitMinusAssign(node)
-	case *parser.MulAssignContext: // AGREGAR
+	case *parser.MulAssignContext:
 		return b.visitMulAssign(node)
-	case *parser.DivAssignContext: // AGREGAR
+	case *parser.DivAssignContext:
 		return b.visitDivAssign(node)
-	case *parser.ModAssignContext: // AGREGAR
+	case *parser.ModAssignContext:
 		return b.visitModAssign(node)
 	case *parser.IfStmtContext:
 		return b.visitIfStmt(node)
@@ -97,8 +97,13 @@ func (b *ASTBuilder) visitStmt(ctx *parser.StmtContext) ast.Statement {
 	case *parser.FuncDeclContext:
 		return b.visitFuncDecl(node)
 	case *parser.FuncCallContext:
-		_ = b.visitFuncCall(node)
-		return nil
+		// IMPORTANTE: Crear un ExpressionStatement para las llamadas a funciones
+		expr := b.visitFuncCall(node)
+		return &ast.ExpressionStatement{
+			Expression: expr,
+			Line:       node.GetStart().GetLine(),
+			Column:     node.GetStart().GetColumn(),
+		}
 	case *parser.StructDeclContext:
 		return b.visitStructDecl(node)
 	case *parser.ReturnStmtContext:
@@ -110,6 +115,40 @@ func (b *ASTBuilder) visitStmt(ctx *parser.StmtContext) ast.Statement {
 	default:
 		b.addError(fmt.Sprintf("unhandled statement type: %T", node))
 		return nil
+	}
+}
+
+// AGREGAMOS LOS MÉTODOS FALTANTES:
+
+// VisitIf_chain procesa una cadena if
+func (b *ASTBuilder) VisitIf_chain(ctx *parser.IfChainContext) interface{} {
+	condition := b.visitExpresion(ctx.Expresion())
+	statements := make([]ast.Statement, 0)
+
+	for _, stmtCtx := range ctx.AllStmt() {
+		if stmt := b.visitStmt(stmtCtx.(*parser.StmtContext)); stmt != nil {
+			statements = append(statements, stmt)
+		}
+	}
+
+	return &IfChainNode{
+		Condition:  condition,
+		Statements: statements,
+	}
+}
+
+// VisitElse_stmt procesa un else
+func (b *ASTBuilder) VisitElse_stmt(ctx *parser.ElseStmtContext) interface{} {
+	statements := make([]ast.Statement, 0)
+
+	for _, stmtCtx := range ctx.AllStmt() {
+		if stmt := b.visitStmt(stmtCtx.(*parser.StmtContext)); stmt != nil {
+			statements = append(statements, stmt)
+		}
+	}
+
+	return &ElseNode{
+		Statements: statements,
 	}
 }
 
@@ -146,7 +185,7 @@ func (b *ASTBuilder) visitIfStmt(ctx *parser.IfStmtContext) ast.Statement {
 	}
 }
 
-// // === PRINT STATEMENTS ===
+// === PRINT STATEMENTS ===
 func (b *ASTBuilder) visitPrintlnStmt(ctx *parser.PrintlnStmtContext) ast.Statement {
 	var args []ast.Expression
 	for _, exprCtx := range ctx.AllExpresion() {
@@ -176,7 +215,7 @@ func (b *ASTBuilder) visitPrintStmt(ctx *parser.PrintStmtContext) ast.Statement 
 	}
 }
 
-// // === VARIABLE DECLARATIONS ===
+// === VARIABLE DECLARATIONS ===
 func (b *ASTBuilder) visitDeclAssign(ctx *parser.DeclAssignContext) ast.Statement {
 	name := ctx.ID().GetText()
 	value := b.visitExpresion(ctx.Expresion())
@@ -203,50 +242,8 @@ func (b *ASTBuilder) visitDirectAssign(ctx *parser.DirectAssignContext) ast.Stat
 	}
 }
 
-// // === CONTROL FLOW ===
-func (b *ASTBuilder) VisitIfStmt(ctx *parser.IfStmtContext) interface{} {
-	// Procesar todos los if_chain como una lista de condiciones
-	var mainIf *ast.IfStmt
-	var currentIf *ast.IfStmt
-
-	// Procesar cada if_chain (incluyendo else if)
-	for i := 0; i < len(ctx.AllIf_chain()); i++ {
-		chainCtx := ctx.If_chain(i)
-
-		// Crear un nuevo IfStmt para esta condición
-		ifStmt := &ast.IfStmt{
-			Line:   ctx.GetStart().GetLine(),
-			Column: ctx.GetStart().GetColumn(),
-		}
-
-		// Procesar este if_chain usando el visitor
-		chainResult := b.Visit(chainCtx)
-		if chainNode, ok := chainResult.(IfChainNode); ok {
-			ifStmt.Condition = chainNode.Condition
-			ifStmt.ThenBranch = chainNode.Statements
-		}
-
-		// Si es el primer if, guardarlo como principal
-		if i == 0 {
-			mainIf = ifStmt
-			currentIf = ifStmt
-		} else {
-			// Si no es el primero, es un else if, así que lo agregamos como else del anterior
-			currentIf.ElseBranch = []ast.Statement{ifStmt}
-			currentIf = ifStmt
-		}
-	}
-
-	// Procesar el else final si existe
-	if ctx.Else_stmt() != nil {
-		elseResult := b.Visit(ctx.Else_stmt())
-		if elseNode, ok := elseResult.(*ElseNode); ok {
-			currentIf.ElseBranch = elseNode.Statements
-		}
-	}
-
-	return mainIf
-}
+// === CONTROL FLOW ===
+// Removemos el método VisitIfStmt duplicado y usamos solo visitIfStmt
 
 func (b *ASTBuilder) visitWhileStmt(ctx *parser.WhileStmtContext) ast.Statement {
 	condition := b.visitExpresion(ctx.Expresion())
@@ -294,7 +291,7 @@ func (b *ASTBuilder) visitForStmt(ctx *parser.ForStmtContext) ast.Statement {
 	}
 }
 
-// // === FUNCTIONS ===
+// === FUNCTIONS ===
 func (b *ASTBuilder) visitFuncDecl(ctx *parser.FuncDeclContext) ast.Statement {
 	name := ctx.ID().GetText()
 	params := make([]ast.Parameter, 0)
@@ -405,9 +402,9 @@ func (b *ASTBuilder) visitExpresion(ctx parser.IExpresionContext) ast.Expression
 		return b.visitBinaryExpr(expr)
 	case *parser.IdContext:
 		return b.visitIdExpr(expr)
-	case *parser.ArrayexpreContext: // ESTE ES EL CASO QUE FALTA
+	case *parser.ArrayexpreContext:
 		return b.visitArrayExpr(expr)
-	case *parser.AsignacionExprContext: // Si tienes asignaciones como expresiones
+	case *parser.AsignacionExprContext:
 		return b.visitAssignmentExpr(expr)
 	default:
 		b.addError(fmt.Sprintf("unhandled expression type: %T", expr))
@@ -472,13 +469,22 @@ func (b *ASTBuilder) visitIdExpr(ctx *parser.IdContext) ast.Expression {
 }
 
 func (b *ASTBuilder) visitFuncCall(ctx *parser.FuncCallContext) ast.Expression {
-	name := b.visitIdPattern(ctx.Id_pattern()).(*ast.Identifier).Name
+	// Manejar id_pattern correctamente
+	idPattern := ctx.Id_pattern().(*parser.IdPatternContext)
+	ids := idPattern.AllID()
+
+	var name string
+	if len(ids) > 0 {
+		name = ids[0].GetText()
+	}
+
 	args := make([]ast.Expression, 0)
 
 	if params := ctx.Parametros(); params != nil {
-		for _, paramCtx := range params.(*parser.ParamListContext).AllFunc_param() {
-			// Cada func_param es solo una expresión
-			expr := paramCtx.(*parser.FuncParamContext).Expresion()
+		paramList := params.(*parser.ParamListContext)
+		for _, paramCtx := range paramList.AllFunc_param() {
+			funcParam := paramCtx.(*parser.FuncParamContext)
+			expr := funcParam.Expresion()
 			args = append(args, b.visitExpresion(expr))
 		}
 	}
@@ -609,6 +615,7 @@ func (b *ASTBuilder) visitValorCaracter(ctx *parser.ValorCaracterContext) ast.Ex
 	}
 }
 
+// === COMPOUND ASSIGNMENTS ===
 func (b *ASTBuilder) visitPlusAssign(ctx *parser.PlusAssignContext) ast.Statement {
 	target := b.visitIdPattern(ctx.Id_pattern())
 	value := b.visitExpresion(ctx.Expresion())
