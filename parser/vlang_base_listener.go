@@ -98,6 +98,12 @@ func (s *BaseVlangListener) EnterStructDecl(ctx *StructDeclContext) {}
 // ExitStructDecl is called when production StructDecl is exited.
 func (s *BaseVlangListener) ExitStructDecl(ctx *StructDeclContext) {}
 
+// EnterStructField is called when production StructField is entered.
+func (s *BaseVlangListener) EnterStructField(ctx *StructFieldContext) {}
+
+// ExitStructField is called when production StructField is exited.
+func (s *BaseVlangListener) ExitStructField(ctx *StructFieldContext) {}
+
 // EnterReturnStmt is called when production ReturnStmt is entered.
 func (s *BaseVlangListener) EnterReturnStmt(ctx *ReturnStmtContext) {}
 
@@ -140,12 +146,6 @@ func (s *BaseVlangListener) EnterIdPattern(ctx *IdPatternContext) {}
 // ExitIdPattern is called when production IdPattern is exited.
 func (s *BaseVlangListener) ExitIdPattern(ctx *IdPatternContext) {}
 
-// EnterCorchetesexpre is called when production corchetesexpre is entered.
-func (s *BaseVlangListener) EnterCorchetesexpre(ctx *CorchetesexpreContext) {}
-
-// ExitCorchetesexpre is called when production corchetesexpre is exited.
-func (s *BaseVlangListener) ExitCorchetesexpre(ctx *CorchetesexpreContext) {}
-
 // EnterFuncionexpre is called when production funcionexpre is entered.
 func (s *BaseVlangListener) EnterFuncionexpre(ctx *FuncionexpreContext) {}
 
@@ -175,6 +175,12 @@ func (s *BaseVlangListener) EnterValorexpresion(ctx *ValorexpresionContext) {}
 
 // ExitValorexpresion is called when production valorexpresion is exited.
 func (s *BaseVlangListener) ExitValorexpresion(ctx *ValorexpresionContext) {}
+
+// EnterArrayexpre is called when production arrayexpre is entered.
+func (s *BaseVlangListener) EnterArrayexpre(ctx *ArrayexpreContext) {}
+
+// ExitArrayexpre is called when production arrayexpre is exited.
+func (s *BaseVlangListener) ExitArrayexpre(ctx *ArrayexpreContext) {}
 
 // EnterAsignacionfor is called when production asignacionfor is entered.
 func (s *BaseVlangListener) EnterAsignacionfor(ctx *AsignacionforContext) {}
@@ -272,6 +278,12 @@ func (s *BaseVlangListener) EnterValorFloat(ctx *ValorFloatContext) {}
 // ExitValorFloat is called when production valorFloat is exited.
 func (s *BaseVlangListener) ExitValorFloat(ctx *ValorFloatContext) {}
 
+// EnterValorStringInterpolation is called when production valorStringInterpolation is entered.
+func (s *BaseVlangListener) EnterValorStringInterpolation(ctx *ValorStringInterpolationContext) {}
+
+// ExitValorStringInterpolation is called when production valorStringInterpolation is exited.
+func (s *BaseVlangListener) ExitValorStringInterpolation(ctx *ValorStringInterpolationContext) {}
+
 // EnterStructInstancia is called when production StructInstancia is entered.
 func (s *BaseVlangListener) EnterStructInstancia(ctx *StructInstanciaContext) {}
 
@@ -296,6 +308,12 @@ func (s *BaseVlangListener) EnterFloatType(ctx *FloatTypeContext) {}
 // ExitFloatType is called when production FloatType is exited.
 func (s *BaseVlangListener) ExitFloatType(ctx *FloatTypeContext) {}
 
+// EnterF64Type is called when production F64Type is entered.
+func (s *BaseVlangListener) EnterF64Type(ctx *F64TypeContext) {}
+
+// ExitF64Type is called when production F64Type is exited.
+func (s *BaseVlangListener) ExitF64Type(ctx *F64TypeContext) {}
+
 // EnterStringType is called when production StringType is entered.
 func (s *BaseVlangListener) EnterStringType(ctx *StringTypeContext) {}
 
@@ -319,6 +337,12 @@ func (s *BaseVlangListener) EnterVoidType(ctx *VoidTypeContext) {}
 
 // ExitVoidType is called when production VoidType is exited.
 func (s *BaseVlangListener) ExitVoidType(ctx *VoidTypeContext) {}
+
+// EnterArrayType is called when production ArrayType is entered.
+func (s *BaseVlangListener) EnterArrayType(ctx *ArrayTypeContext) {}
+
+// ExitArrayType is called when production ArrayType is exited.
+func (s *BaseVlangListener) ExitArrayType(ctx *ArrayTypeContext) {}
 
 // EnterStructVector is called when production StructVector is entered.
 func (s *BaseVlangListener) EnterStructVector(ctx *StructVectorContext) {}

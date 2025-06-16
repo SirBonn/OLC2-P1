@@ -59,6 +59,10 @@ func (v *BaseVlangVisitor) VisitStructDecl(ctx *StructDeclContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseVlangVisitor) VisitStructField(ctx *StructFieldContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseVlangVisitor) VisitReturnStmt(ctx *ReturnStmtContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -87,10 +91,6 @@ func (v *BaseVlangVisitor) VisitIdPattern(ctx *IdPatternContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseVlangVisitor) VisitCorchetesexpre(ctx *CorchetesexpreContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseVlangVisitor) VisitFuncionexpre(ctx *FuncionexpreContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -108,6 +108,10 @@ func (v *BaseVlangVisitor) VisitIncredecr(ctx *IncredecrContext) interface{} {
 }
 
 func (v *BaseVlangVisitor) VisitValorexpresion(ctx *ValorexpresionContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseVlangVisitor) VisitArrayexpre(ctx *ArrayexpreContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -175,6 +179,10 @@ func (v *BaseVlangVisitor) VisitValorFloat(ctx *ValorFloatContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseVlangVisitor) VisitValorStringInterpolation(ctx *ValorStringInterpolationContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseVlangVisitor) VisitStructInstancia(ctx *StructInstanciaContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -191,6 +199,10 @@ func (v *BaseVlangVisitor) VisitFloatType(ctx *FloatTypeContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseVlangVisitor) VisitF64Type(ctx *F64TypeContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseVlangVisitor) VisitStringType(ctx *StringTypeContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -204,6 +216,10 @@ func (v *BaseVlangVisitor) VisitCharType(ctx *CharTypeContext) interface{} {
 }
 
 func (v *BaseVlangVisitor) VisitVoidType(ctx *VoidTypeContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseVlangVisitor) VisitArrayType(ctx *ArrayTypeContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

@@ -141,9 +141,14 @@ func (b *ASTBuilder) visitIfStmt(ctx *parser.IfStmtContext) ast.Statement {
 
 // // === PRINT STATEMENTS ===
 func (b *ASTBuilder) visitPrintlnStmt(ctx *parser.PrintlnStmtContext) ast.Statement {
-	expr := b.visitExpresion(ctx.Expresion())
+	var args []ast.Expression
+	for _, exprCtx := range ctx.AllExpresion() {
+		expr := b.visitExpresion(exprCtx)
+		args = append(args, expr)
+	}
+
 	return &ast.PrintStmt{
-		Arguments: []ast.Expression{expr},
+		Arguments: args,
 		NewLine:   true,
 		Line:      ctx.GetStart().GetLine(),
 		Column:    ctx.GetStart().GetColumn(),
@@ -460,11 +465,10 @@ func (b *ASTBuilder) visitFuncCall(ctx *parser.FuncCallContext) ast.Expression {
 	args := make([]ast.Expression, 0)
 
 	if params := ctx.Parametros(); params != nil {
-		// TODO: Procesar parámetros
 		for _, paramCtx := range params.(*parser.ParamListContext).AllFunc_param() {
-			// Por ahora, asumimos que los parámetros son identificadores
-			idPattern := paramCtx.(*parser.FuncParamContext).Id_pattern()
-			args = append(args, b.visitIdPattern(idPattern))
+			// Cada func_param es solo una expresión
+			expr := paramCtx.(*parser.FuncParamContext).Expresion()
+			args = append(args, b.visitExpresion(expr))
 		}
 	}
 

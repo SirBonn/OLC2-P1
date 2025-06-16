@@ -33,7 +33,7 @@ if_chain: IF_KW expresion  LCOR stmt* RCOR # IfChain;
 
 else_stmt: ELSE_KW LCOR stmt* RCOR # ElseStmt;
 
-println: 'println'  LPAREN expresion RPAREN # PrintlnStmt;
+println: 'println'  LPAREN expresion (COMMA expresion)* RPAREN # PrintlnStmt;
 print: 'print'  LPAREN expresion (COMMA expresion)* RPAREN # PrintStmt;
 
 while_stmt: WHILE_KW expresion LCOR stmt* RCOR # WhileStmt;
@@ -53,7 +53,7 @@ func_dcl:
     // id(parametros | vacio )  { } 
     //    visitor -> recorrer esos stmts
     // fn id (x int, n string) 
-    'fn' ID LPAREN (arg_list)? RPAREN LCOR stmt* RCOR # FuncDecl
+    'fn' ID LPAREN (arg_list)? RPAREN (var_type)? LCOR stmt* RCOR # FuncDecl
     ;
 
 
@@ -70,9 +70,13 @@ struct_dcl:
     los atributos sin asignacion
     
      */
-    'struct' ID LCOR (assign_stmt)* RCOR # StructDecl
+    'struct' ID LCOR (struct_field)* RCOR # StructDecl
     ;
 
+// Nueva regla para campos de struct
+struct_field:
+    var_type ID # StructField
+    ;
 
 transfer_stmt:
 	RETURN_KW expresion?	# ReturnStmt
@@ -86,7 +90,7 @@ assign_stmt:
 
 decl_stmt: 
     MUT ID ASSIGN expresion # DeclAssign
-    | MUT id_pattern COLON var_type ASSIGN expresion # DeclAssignType
+    | MUT ID var_type ASSIGN expresion # DeclAssignType
     ; 
 
 
@@ -96,7 +100,7 @@ expresion
     : valor                                                #valorexpresion        
     | func_call                                            #funcionexpre
     | LPAREN expresion RPAREN                              #parentesisexpre
-    | LBRACK expresion RBRACK                              #corchetesexpre
+    | LBRACK expresion (COMMA expresion)* RBRACK           #arrayexpre
     | op=(NOT | MINUS) expresion                           #unario
 
 // ------------- >  Reglas de Expresiones Aritmeticas
@@ -141,7 +145,7 @@ func_arg: (ID COLON)? (ANPERSAND)? (id_pattern | expr) # FuncArg; //
 
 // === Parámetros en llamadas ===
 parametros: func_param (COMMA func_param)* # ParamList;
-func_param : id_pattern #funcParam;
+func_param : expresion #funcParam;
 
 
 // ===== Argumentos en las declaraciones === catch
@@ -162,6 +166,7 @@ valor
     | BOOLEANO  #valorBooleano
     | CARACTER  #valorCaracter
     | FLOAT     #valorFloat
+    | STRING_INTERPOLATION #valorStringInterpolation
     ;
 
 // ===== STRUCTS ==== catch
@@ -185,17 +190,19 @@ miInstancia = Persona{
  */
 
 struct_prop:
-
-	var_type ID ASSIGN ID LCOR (ID COLON expresion COMMA) RCOR 	# StructAttr
+	ID COLON expresion COMMA? 	# StructAttr
 ;
+
 // tipos de primitivos que puede ser un struct catch
 var_type
     : 'int'     # IntType
     | 'float'   # FloatType
+    | 'f64'     # F64Type
     | 'string'  # StringType
     | 'bool'    # BoolType
     | 'char'    # CharType
     | 'void'    # VoidType
+    | LBRACK RBRACK var_type # ArrayType
     ;
 
 struct_vector: LBRACK ID RBRACK LPAREN RPAREN # StructVector;
@@ -218,9 +225,10 @@ FLOAT    : [0-9]+ '.' [0-9]* | [0-9]* '.' [0-9]+ ;
 DECIMAL  : [0-9]+ '.' [0-9]+ ;
 CADENA   : '"' (~["\\] | '\\' .)* '"' ;
 CARACTER : '\'' . '\'' ;
+STRING_INTERPOLATION : '"' (~["\\$] | '\\' . | '$' ~[{] | '$' '{' (~[}])* '}')* '"' | '\'' (~["\\$] | '\\' . | '$' ~[{] | '$' '{' (~[}])* '}')* '\'' ;
 
 // === Identificadores ===
-ID : [a-zA-Z_][a-zA-Z0-9_]* ;
+
 
 
 IF_KW : 'if' ;
@@ -231,6 +239,7 @@ IN_KW : 'in' ;
 RETURN_KW : 'return' ;
 BREAK_KW : 'break' ;
 CONTINUE_KW : 'continue' ;
+ID : [a-zA-Z_][a-zA-Z0-9_]* ;
 // === Operadores ===
 PLUS    : '+' ;
 MINUS   : '-' ;

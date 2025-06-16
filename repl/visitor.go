@@ -299,30 +299,39 @@ func (v *ReplVisitor) VisitPrintStmt(ctx *parser.PrintStmtContext) interface{} {
 func (v *ReplVisitor) VisitPrintlnStmt(ctx *parser.PrintlnStmtContext) interface{} {
 	fmt.Println("🔍 Visitando PrintlnStmt:", ctx.GetText())
 
-	// Evaluar expresión
-	result := v.Visit(ctx.Expresion())
-	fmt.Println("🔍 Resultado de la expresión:", result)
-	if result == nil {
-		v.ErrorTable.NewSemanticError(ctx.GetStart(), "Expresión vacía dentro de Println")
+	expresiones := ctx.AllExpresion()
+	if len(expresiones) == 0 {
+		v.ErrorTable.NewSemanticError(ctx.GetStart(), "Se requiere al menos una expresión en println")
 		return nil
 	}
 
-	// Verificar que el resultado sea IVOR
-	val, ok := result.(value.IVOR)
-	if !ok {
-		fmt.Println("🔍 Resultado no es IVOR:", result)
-		v.ErrorTable.NewSemanticError(ctx.GetStart(), "La expresión no devuelve un valor válido")
-		return nil
+	var resultados []string
+
+	for _, expr := range expresiones {
+		result := v.Visit(expr)
+		if result == nil {
+			v.ErrorTable.NewSemanticError(expr.GetStart(), "Expresión vacía dentro de Println")
+			continue
+		}
+
+		val, ok := result.(value.IVOR)
+		if !ok {
+			fmt.Println("🔍 Resultado no es IVOR:", result)
+			v.ErrorTable.NewSemanticError(expr.GetStart(), "La expresión no devuelve un valor válido")
+			continue
+		}
+
+		valInterno := val.Value()
+		valTipo := val.Type()
+		fmt.Printf("🔔 Imprimiendo valor: %v (tipo: %s)\n", valInterno, valTipo)
+
+		resultados = append(resultados, fmt.Sprintf("%v", valInterno))
 	}
 
-	// Obtener valor interno e imprimirlo como texto
-	valInterno := val.Value()
-	valTipo := val.Type()
+	if len(resultados) > 0 {
+		v.Console.Println(strings.Join(resultados, " "))
+	}
 
-	fmt.Printf("🔔 Imprimiendo valor: %v (tipo: %s)\n", valInterno, valTipo)
-
-	// Agregar a consola como string
-	v.Console.Println(fmt.Sprintf("%v", valInterno))
 	return nil
 }
 
@@ -482,9 +491,29 @@ func (v *ReplVisitor) VisitIdPattern(ctx *parser.IdContext) interface{} {
 	return ctx.GetText()
 }
 
-func (v *ReplVisitor) VisitCorchetesexpre(ctx *parser.CorchetesexpreContext) interface{} {
+func (v *ReplVisitor) visitArrayExpresion(ctx *parser.ArrayexpreContext) interface{} {
+	fmt.Println("🔍 Visitando arrayexpre:", ctx.GetText())
 
-	return v.Visit(ctx.Expresion())
+	var elementos []value.IVOR
+	for _, exprCtx := range ctx.AllExpresion() {
+		result := v.Visit(exprCtx)
+
+		if result == nil {
+			v.ErrorTable.NewSemanticError(exprCtx.GetStart(), "Elemento inválido en el arreglo")
+			continue
+		}
+
+		val, ok := result.(value.IVOR)
+		if !ok {
+			v.ErrorTable.NewSemanticError(exprCtx.GetStart(), "Expresión no válida en el arreglo")
+			continue
+		}
+
+		elementos = append(elementos, val)
+	}
+
+	// Retornar una representación del array, por ejemplo un wrapper IVORArray
+	return value.NewArray(elementos)
 }
 
 // Suma Re

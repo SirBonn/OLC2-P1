@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"compiler/ast"
-	"compiler/reports"
 
 	// "compiler/semantic"
 
@@ -291,19 +290,35 @@ func (ide *IDE) showASTReport() {
 		return
 	}
 
+	if ide.astRoot == nil {
+		fmt.Println("AST es nil")
+		return
+	}
+
+	// Imprimir tipo del nodo raíz
+	fmt.Printf("AST Root Type: %T\n", ide.astRoot)
+
+	// Si es un Program, imprimir el número de statements
+	if program, ok := ide.astRoot.(*ast.Program); ok {
+		fmt.Printf("Program tiene %d statements\n", len(program.Statements))
+		for i, stmt := range program.Statements {
+			fmt.Printf("  Statement %d: %T\n", i, stmt)
+		}
+	}
+
 	// Generar el reporte del AST
-	html := reports.GenerateASTReport(ide.astRoot)
+	// html := reports.GenerateASTReport(ide.astRoot)
 
-	// Guardar el archivo HTML
-	filename := "ast_report.html"
-	reports.SaveAndOpenReport(html, filename)
+	// // Guardar el archivo HTML
+	// filename := "ast_report.html"
+	// reports.SaveAndOpenReport(html, filename)
 
-	// Opcionalmente, generar imagen con Graphviz
-	dot := reports.GenerateASTDot(ide.astRoot)
-	reports.GenerateASTImage(dot, "ast_graph.png")
+	// // Opcionalmente, generar imagen con Graphviz
+	// dot := reports.GenerateASTDot(ide.astRoot)
+	// reports.GenerateASTImage(dot, "ast_graph.png")
 
-	dialog.ShowInformation("Reporte AST",
-		"Reporte generado exitosamente en "+filename, ide.window)
+	// dialog.ShowInformation("Reporte AST",
+	// 	"Reporte generado exitosamente en "+filename, ide.window)
 }
 
 func (ide *IDE) showSymbolTableReport() {

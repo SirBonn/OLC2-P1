@@ -46,6 +46,9 @@ type VlangVisitor interface {
 	// Visit a parse tree produced by VlangParser#StructDecl.
 	VisitStructDecl(ctx *StructDeclContext) interface{}
 
+	// Visit a parse tree produced by VlangParser#StructField.
+	VisitStructField(ctx *StructFieldContext) interface{}
+
 	// Visit a parse tree produced by VlangParser#ReturnStmt.
 	VisitReturnStmt(ctx *ReturnStmtContext) interface{}
 
@@ -67,9 +70,6 @@ type VlangVisitor interface {
 	// Visit a parse tree produced by VlangParser#IdPattern.
 	VisitIdPattern(ctx *IdPatternContext) interface{}
 
-	// Visit a parse tree produced by VlangParser#corchetesexpre.
-	VisitCorchetesexpre(ctx *CorchetesexpreContext) interface{}
-
 	// Visit a parse tree produced by VlangParser#funcionexpre.
 	VisitFuncionexpre(ctx *FuncionexpreContext) interface{}
 
@@ -84,6 +84,9 @@ type VlangVisitor interface {
 
 	// Visit a parse tree produced by VlangParser#valorexpresion.
 	VisitValorexpresion(ctx *ValorexpresionContext) interface{}
+
+	// Visit a parse tree produced by VlangParser#arrayexpre.
+	VisitArrayexpre(ctx *ArrayexpreContext) interface{}
 
 	// Visit a parse tree produced by VlangParser#asignacionfor.
 	VisitAsignacionfor(ctx *AsignacionforContext) interface{}
@@ -133,6 +136,9 @@ type VlangVisitor interface {
 	// Visit a parse tree produced by VlangParser#valorFloat.
 	VisitValorFloat(ctx *ValorFloatContext) interface{}
 
+	// Visit a parse tree produced by VlangParser#valorStringInterpolation.
+	VisitValorStringInterpolation(ctx *ValorStringInterpolationContext) interface{}
+
 	// Visit a parse tree produced by VlangParser#StructInstancia.
 	VisitStructInstancia(ctx *StructInstanciaContext) interface{}
 
@@ -145,6 +151,9 @@ type VlangVisitor interface {
 	// Visit a parse tree produced by VlangParser#FloatType.
 	VisitFloatType(ctx *FloatTypeContext) interface{}
 
+	// Visit a parse tree produced by VlangParser#F64Type.
+	VisitF64Type(ctx *F64TypeContext) interface{}
+
 	// Visit a parse tree produced by VlangParser#StringType.
 	VisitStringType(ctx *StringTypeContext) interface{}
 
@@ -156,6 +165,9 @@ type VlangVisitor interface {
 
 	// Visit a parse tree produced by VlangParser#VoidType.
 	VisitVoidType(ctx *VoidTypeContext) interface{}
+
+	// Visit a parse tree produced by VlangParser#ArrayType.
+	VisitArrayType(ctx *ArrayTypeContext) interface{}
 
 	// Visit a parse tree produced by VlangParser#StructVector.
 	VisitStructVector(ctx *StructVectorContext) interface{}

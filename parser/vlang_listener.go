@@ -46,6 +46,9 @@ type VlangListener interface {
 	// EnterStructDecl is called when entering the StructDecl production.
 	EnterStructDecl(c *StructDeclContext)
 
+	// EnterStructField is called when entering the StructField production.
+	EnterStructField(c *StructFieldContext)
+
 	// EnterReturnStmt is called when entering the ReturnStmt production.
 	EnterReturnStmt(c *ReturnStmtContext)
 
@@ -67,9 +70,6 @@ type VlangListener interface {
 	// EnterIdPattern is called when entering the IdPattern production.
 	EnterIdPattern(c *IdPatternContext)
 
-	// EnterCorchetesexpre is called when entering the corchetesexpre production.
-	EnterCorchetesexpre(c *CorchetesexpreContext)
-
 	// EnterFuncionexpre is called when entering the funcionexpre production.
 	EnterFuncionexpre(c *FuncionexpreContext)
 
@@ -84,6 +84,9 @@ type VlangListener interface {
 
 	// EnterValorexpresion is called when entering the valorexpresion production.
 	EnterValorexpresion(c *ValorexpresionContext)
+
+	// EnterArrayexpre is called when entering the arrayexpre production.
+	EnterArrayexpre(c *ArrayexpreContext)
 
 	// EnterAsignacionfor is called when entering the asignacionfor production.
 	EnterAsignacionfor(c *AsignacionforContext)
@@ -133,6 +136,9 @@ type VlangListener interface {
 	// EnterValorFloat is called when entering the valorFloat production.
 	EnterValorFloat(c *ValorFloatContext)
 
+	// EnterValorStringInterpolation is called when entering the valorStringInterpolation production.
+	EnterValorStringInterpolation(c *ValorStringInterpolationContext)
+
 	// EnterStructInstancia is called when entering the StructInstancia production.
 	EnterStructInstancia(c *StructInstanciaContext)
 
@@ -145,6 +151,9 @@ type VlangListener interface {
 	// EnterFloatType is called when entering the FloatType production.
 	EnterFloatType(c *FloatTypeContext)
 
+	// EnterF64Type is called when entering the F64Type production.
+	EnterF64Type(c *F64TypeContext)
+
 	// EnterStringType is called when entering the StringType production.
 	EnterStringType(c *StringTypeContext)
 
@@ -156,6 +165,9 @@ type VlangListener interface {
 
 	// EnterVoidType is called when entering the VoidType production.
 	EnterVoidType(c *VoidTypeContext)
+
+	// EnterArrayType is called when entering the ArrayType production.
+	EnterArrayType(c *ArrayTypeContext)
 
 	// EnterStructVector is called when entering the StructVector production.
 	EnterStructVector(c *StructVectorContext)
@@ -205,6 +217,9 @@ type VlangListener interface {
 	// ExitStructDecl is called when exiting the StructDecl production.
 	ExitStructDecl(c *StructDeclContext)
 
+	// ExitStructField is called when exiting the StructField production.
+	ExitStructField(c *StructFieldContext)
+
 	// ExitReturnStmt is called when exiting the ReturnStmt production.
 	ExitReturnStmt(c *ReturnStmtContext)
 
@@ -226,9 +241,6 @@ type VlangListener interface {
 	// ExitIdPattern is called when exiting the IdPattern production.
 	ExitIdPattern(c *IdPatternContext)
 
-	// ExitCorchetesexpre is called when exiting the corchetesexpre production.
-	ExitCorchetesexpre(c *CorchetesexpreContext)
-
 	// ExitFuncionexpre is called when exiting the funcionexpre production.
 	ExitFuncionexpre(c *FuncionexpreContext)
 
@@ -243,6 +255,9 @@ type VlangListener interface {
 
 	// ExitValorexpresion is called when exiting the valorexpresion production.
 	ExitValorexpresion(c *ValorexpresionContext)
+
+	// ExitArrayexpre is called when exiting the arrayexpre production.
+	ExitArrayexpre(c *ArrayexpreContext)
 
 	// ExitAsignacionfor is called when exiting the asignacionfor production.
 	ExitAsignacionfor(c *AsignacionforContext)
@@ -292,6 +307,9 @@ type VlangListener interface {
 	// ExitValorFloat is called when exiting the valorFloat production.
 	ExitValorFloat(c *ValorFloatContext)
 
+	// ExitValorStringInterpolation is called when exiting the valorStringInterpolation production.
+	ExitValorStringInterpolation(c *ValorStringInterpolationContext)
+
 	// ExitStructInstancia is called when exiting the StructInstancia production.
 	ExitStructInstancia(c *StructInstanciaContext)
 
@@ -304,6 +322,9 @@ type VlangListener interface {
 	// ExitFloatType is called when exiting the FloatType production.
 	ExitFloatType(c *FloatTypeContext)
 
+	// ExitF64Type is called when exiting the F64Type production.
+	ExitF64Type(c *F64TypeContext)
+
 	// ExitStringType is called when exiting the StringType production.
 	ExitStringType(c *StringTypeContext)
 
@@ -315,6 +336,9 @@ type VlangListener interface {
 
 	// ExitVoidType is called when exiting the VoidType production.
 	ExitVoidType(c *VoidTypeContext)
+
+	// ExitArrayType is called when exiting the ArrayType production.
+	ExitArrayType(c *ArrayTypeContext)
 
 	// ExitStructVector is called when exiting the StructVector production.
 	ExitStructVector(c *StructVectorContext)
