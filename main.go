@@ -203,6 +203,20 @@ func (ide *IDE) runCode() {
 		return
 	}
 
+	// NUEVO: Realizar análisis semántico
+	semanticAnalyzer := ast.NewSemanticAnalyzer()
+	err = semanticAnalyzer.Analyze(astProgram)
+	if err != nil {
+		// Imprimir errores semánticos
+		for _, e := range semanticAnalyzer.GetSymbolTable().GetErrors() {
+			fmt.Println("Semantic Error:", e)
+		}
+		ide.outputEntry.SetText(ide.outputEntry.Text + fmt.Sprintf("❌ Error: %v\n", err))
+	}
+
+	// Imprimir tabla de símbolos (opcional, para debug)
+	semanticAnalyzer.GetSymbolTable().PrintTable()
+
 	ide.outputEntry.SetText(ide.outputEntry.Text + "✅ AST construido exitosamente\n")
 
 	// === FASE 4: INTERPRETACIÓN ===
