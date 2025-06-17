@@ -21,41 +21,36 @@ func ReadFile(filename string) string {
 		panic(err)
 	}
 	defer file.Close()
-
 	content, _ := io.ReadAll(file)
 	return string(content)
 }
 
 func CstReport(input string) string {
-
-	// get the content (relative to this path) ../compiler/TSwiftLanguage.g4
-
 	parserContent := ""
-
 	_, filename, _, _ := runtime.Caller(0)
-
 	path := filepath.Dir(filename)
-
-	// remove \cst from the path
 	path = path[:len(path)-4]
 
 	parser, err := json.Marshal(ReadFile(filepath.Join(path, "/parser/Vlang.g4")))
-
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Error reading parser file:", err)
+		return ""
 	}
 	parserContent = string(parser)
 
 	lexerContent := ""
 	lexer, err := json.Marshal(ReadFile(filepath.Join(path, "/parser/Vlang.g4")))
-
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Error reading lexer file:", err)
+		return ""
 	}
-
 	lexerContent = string(lexer)
 
 	jinput, err := json.Marshal(input)
+	if err != nil {
+		fmt.Println("Error marshaling input:", err)
+		return ""
+	}
 	finput := string(jinput)
 
 	payload := []byte(
@@ -69,12 +64,11 @@ func CstReport(input string) string {
 			parserContent,
 			finput,
 			lexerContent,
-			"program",
+			"programa",
 		),
 	)
 
 	req, err := http.NewRequest("POST", "http://lab.antlr.org/parse/", bytes.NewBuffer(payload))
-
 	if err != nil {
 		fmt.Println("Error creating request:", err)
 		return ""
@@ -95,17 +89,59 @@ func CstReport(input string) string {
 		return ""
 	}
 
-	// create a map to store the json
+	// fmt.Printf("Response status: %d\n", resp.StatusCode)
+	// fmt.Printf("Response body: %s\n", string(body))
+
 	var data map[string]interface{}
 
-	// // unmarshal the json
+	// Unmarshal the JSON
 	err = json.Unmarshal(body, &data)
 	if err != nil {
 		fmt.Println("Error unmarshalling json:", err)
 		return ""
 	}
 
-	result := data["result"].(map[string]interface{})
+	resultInterface, exists := data["result"]
+	if !exists {
+		fmt.Println("No 'result' field in response")
+		if errorMsg, hasError := data["error"]; hasError {
+			fmt.Printf("Server error: %v\n", errorMsg)
+		}
+		return ""
+	}
 
-	return result["svgtree"].(string)
+	if resultInterface == nil {
+		fmt.Println("'result' field is nil")
+		return ""
+	}
+
+	result, ok := resultInterface.(map[string]interface{})
+	if !ok {
+		// fmt.Printf("'result' is not a map, it's: %T\n", resultInterface)
+		return ""
+	}
+
+	svgtreeInterface, exists := result["svgtree"]
+	if !exists {
+		fmt.Println("No 'svgtree' field in result")
+		// Imprimir todos los campos disponibles en result
+		fmt.Println("Available fields in result:")
+		for key := range result {
+			fmt.Printf("  - %s\n", key)
+		}
+		return ""
+	}
+
+	if svgtreeInterface == nil {
+		fmt.Println("'svgtree' field is nil")
+		return ""
+	}
+
+	svgtree, ok := svgtreeInterface.(string)
+	if !ok {
+		fmt.Printf("'svgtree' is not a string, it's: %T\n", svgtreeInterface)
+		return ""
+	}
+
+	return svgtree
 }

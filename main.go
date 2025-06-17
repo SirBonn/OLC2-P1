@@ -1,17 +1,14 @@
 package main
 
 import (
+	"compiler/ast"
+	"compiler/cst"
 	"compiler/errors"
 	parser "compiler/parser"
+	"compiler/reports"
 	"fmt"
-
-	// "go/ast"
 	"io/ioutil"
 	"strings"
-
-	"compiler/ast"
-
-	// "compiler/semantic"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -29,65 +26,53 @@ type LineNumberedEditor struct {
 	container   *fyne.Container
 }
 
-// NewLineNumberedEditor crea una nueva instancia del editor con números de línea
 func NewLineNumberedEditor() *LineNumberedEditor {
 	editor := &LineNumberedEditor{}
 	editor.ExtendBaseWidget(editor)
 
-	// Crear el editor de texto
 	editor.entry = widget.NewMultiLineEntry()
-	editor.entry.Wrapping = fyne.TextWrapOff // Desactivar wrap para mejor alineación
+	editor.entry.Wrapping = fyne.TextWrapOff
 	editor.entry.SetPlaceHolder("// Escribe tu código V-Lang Cherry aquí...")
 
-	// Crear el widget de números de línea usando Label simple
 	editor.lineNumbers = widget.NewLabel("1")
-	editor.lineNumbers.Alignment = fyne.TextAlignTrailing // Alinear a la derecha
+	editor.lineNumbers.Alignment = fyne.TextAlignTrailing
 
-	// Configurar el callback para actualizar los números cuando el texto cambie
 	editor.entry.OnChanged = func(text string) {
 		editor.updateLineNumbers(text)
 	}
 
-	// Configurar tamaño fijo para los números de línea
-	editor.lineNumbers.Resize(fyne.NewSize(60, 0)) // Ancho fijo de 60 píxeles
+	editor.lineNumbers.Resize(fyne.NewSize(60, 0))
 
-	// Crear el contenedor usando Border para mejor control de tamaño
 	editor.container = container.NewBorder(
-		nil, nil, // top, bottom
-		editor.lineNumbers, nil, // left, right
-		editor.entry, // center (toma el espacio restante)
+		nil, nil,
+		editor.lineNumbers, nil,
+		editor.entry,
 	)
 
-	// Inicializar con la primera línea
 	editor.updateLineNumbers("")
 
 	return editor
 }
 
-// updateLineNumbers actualiza los números de línea basándose en el contenido
 func (e *LineNumberedEditor) updateLineNumbers(text string) {
 	lines := strings.Split(text, "\n")
 	if len(lines) == 0 {
 		lines = []string{""}
 	}
 
-	// Construir los números de línea
 	var lineNumbers []string
 	for i := 1; i <= len(lines); i++ {
 		lineNumbers = append(lineNumbers, fmt.Sprintf("%3d", i))
 	}
 
-	// Actualizar el label de números de línea
 	numbersText := strings.Join(lineNumbers, "\n")
 	e.lineNumbers.SetText(numbersText)
 }
 
-// CreateRenderer implementa la interfaz fyne.Widget
 func (e *LineNumberedEditor) CreateRenderer() fyne.WidgetRenderer {
 	return widget.NewSimpleRenderer(e.container)
 }
 
-// Métodos para exponer la funcionalidad del Entry subyacente
 func (e *LineNumberedEditor) SetText(text string) {
 	e.entry.SetText(text)
 }
@@ -108,32 +93,30 @@ func (e *LineNumberedEditor) Enable() {
 	e.entry.Enable()
 }
 
-// Método para establecer callback de cambio de texto
 func (e *LineNumberedEditor) OnChanged(callback func(string)) {
 	originalCallback := e.entry.OnChanged
 	e.entry.OnChanged = func(text string) {
-		originalCallback(text) // Mantener la actualización de números
+		originalCallback(text)
 		if callback != nil {
-			callback(text) // Llamar al callback personalizado
+			callback(text)
 		}
 	}
 }
 
 type IDE struct {
-	window      fyne.Window
-	codeEditor  *LineNumberedEditor // Cambiar de codeEntry a codeEditor
-	outputEntry *widget.Entry
-	currentFile string
-	app         fyne.App
-	// Componentes para reportes
-	errorTable  *errors.ErrorTable
-	symbolTable interface{}
-	astRoot     ast.Node
+	window           fyne.Window
+	codeEditor       *LineNumberedEditor
+	outputEntry      *widget.Entry
+	currentFile      string
+	app              fyne.App
+	errorTable       *errors.ErrorTable
+	symbolTable      *ast.SymbolTable
+	semanticAnalyzer *ast.SemanticAnalyzer
 }
 
 func main() {
 	a := app.NewWithID("com.vlang.ide")
-	w := a.NewWindow("🍒 V-Lang Cherry IDE")
+	w := a.NewWindow("V-Lang Cherry IDE")
 
 	ide := &IDE{
 		window: w,
@@ -151,27 +134,23 @@ func main() {
 }
 
 func (ide *IDE) createMainContent() fyne.CanvasObject {
-	// Usar el nuevo editor con números de línea
 	ide.codeEditor = NewLineNumberedEditor()
 
-	// Consola de salida (mantener como está)
 	ide.outputEntry = widget.NewMultiLineEntry()
 	ide.outputEntry.Wrapping = fyne.TextWrapWord
 	ide.outputEntry.Disable()
 
-	// Tabs
 	tabs := container.NewAppTabs(
-		container.NewTabItem("📝 Editor", container.NewVScroll(ide.codeEditor)),
-		container.NewTabItem("🖥️ Consola", container.NewVScroll(ide.outputEntry)),
+		container.NewTabItem("Editor", container.NewVScroll(ide.codeEditor)),
+		container.NewTabItem("Consola", container.NewVScroll(ide.outputEntry)),
 	)
 
-	// Toolbar
 	toolbar := ide.createToolbar()
 
 	return container.NewBorder(toolbar, nil, nil, nil, tabs)
 }
+
 func (ide *IDE) createMenu() *fyne.MainMenu {
-	// Menú Archivo
 	fileMenu := fyne.NewMenu("Archivo",
 		fyne.NewMenuItem("Nuevo", func() { ide.newFile() }),
 		fyne.NewMenuItem("Abrir...", func() { ide.openFile() }),
@@ -180,16 +159,14 @@ func (ide *IDE) createMenu() *fyne.MainMenu {
 		fyne.NewMenuItem("Guardar como...", func() { ide.saveFileAs() }),
 	)
 
-	// Menú Herramientas
 	toolsMenu := fyne.NewMenu("Herramientas",
 		fyne.NewMenuItem("Ejecutar", func() { ide.runCode() }),
 	)
 
-	// Menú Reportes - ahora con todos los métodos implementados
 	reportsMenu := fyne.NewMenu("Reportes",
 		fyne.NewMenuItem("Reporte de Errores", func() { ide.showErrorsReport() }),
 		fyne.NewMenuItem("Tabla de Símbolos", func() { ide.showSymbolTableReport() }),
-		fyne.NewMenuItem("Reporte AST", func() { ide.showASTReport() }),
+		fyne.NewMenuItem("Reporte CST", func() { ide.showCSTReport() }),
 	)
 
 	return fyne.NewMainMenu(fileMenu, toolsMenu, reportsMenu)
@@ -204,7 +181,6 @@ func (ide *IDE) createToolbar() fyne.CanvasObject {
 	return container.NewHBox(runBtn)
 }
 
-// Funciones de archivo
 func (ide *IDE) newFile() {
 	ide.codeEditor.SetText("")
 	ide.currentFile = ""
@@ -260,16 +236,14 @@ func (ide *IDE) saveFileAs() {
 
 func (ide *IDE) runCode() {
 	code := ide.codeEditor.Text()
-	ide.outputEntry.SetText("🔄 Compilando...\n\n")
+	ide.outputEntry.SetText("Compilando...\n\n")
 
-	// === FASE 1: ANÁLISIS LÉXICO ===
 	lexicalErrs := errors.NewLexicalErrorListener()
 	lexer := parser.NewVlangLexer(antlr.NewInputStream(code))
 	lexer.RemoveErrorListeners()
 	lexer.AddErrorListener(lexicalErrs)
 	tokens := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
 
-	// === FASE 2: ANÁLISIS SINTÁCTICO ===
 	p := parser.NewVlangParser(tokens)
 	p.BuildParseTrees = true
 	syntaxErrs := errors.NewSyntaxErrorListener(lexicalErrs.ErrorTable)
@@ -284,59 +258,52 @@ func (ide *IDE) runCode() {
 		return
 	}
 
-	ide.outputEntry.SetText("✅ Análisis léxico y sintáctico completado\n")
-
-	// === FASE 3: CONSTRUCCIÓN DEL AST ===
-	ide.outputEntry.SetText(ide.outputEntry.Text + "🔨 Construyendo AST...\n")
+	ide.outputEntry.SetText("Análisis léxico y sintáctico completado\n")
+	ide.outputEntry.SetText(ide.outputEntry.Text + "Construyendo AST...\n")
 
 	astBuilder := NewASTBuilder()
 	astProgram, err := astBuilder.Build(tree)
 
 	if err != nil {
-		ide.outputEntry.SetText(ide.outputEntry.Text + fmt.Sprintf("❌ Error al construir el AST: %v\n", err))
+		ide.outputEntry.SetText(ide.outputEntry.Text + fmt.Sprintf("Error al construir el AST: %v\n", err))
 		return
 	}
 
-	// NUEVO: Realizar análisis semántico
-	semanticAnalyzer := ast.NewSemanticAnalyzer()
-	err = semanticAnalyzer.Analyze(astProgram)
+	ide.semanticAnalyzer = ast.NewSemanticAnalyzer()
+	err = ide.semanticAnalyzer.Analyze(astProgram)
 	if err != nil {
-		// Imprimir errores semánticos
-		for _, e := range semanticAnalyzer.GetSymbolTable().GetErrors() {
-			fmt.Println("Semantic Error:", e)
+		for _, e := range ide.semanticAnalyzer.GetSymbolTable().GetErrors() {
+			fmt.Println("Error semántico:", e)
 		}
-		ide.outputEntry.SetText(ide.outputEntry.Text + fmt.Sprintf("❌ Error: %v\n", err))
+		ide.outputEntry.SetText(ide.outputEntry.Text + fmt.Sprintf("Error: %v\n", err))
 	}
 
-	// Imprimir tabla de símbolos (opcional, para debug)
-	semanticAnalyzer.GetSymbolTable().PrintTable()
+	ide.symbolTable = ide.semanticAnalyzer.GetSymbolTable()
 
-	ide.outputEntry.SetText(ide.outputEntry.Text + "✅ AST construido exitosamente\n")
-
-	// === FASE 4: INTERPRETACIÓN ===
-	ide.outputEntry.SetText(ide.outputEntry.Text + "\n🚀 Ejecutando programa...\n")
-	ide.outputEntry.SetText(ide.outputEntry.Text + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
+	ide.outputEntry.SetText(ide.outputEntry.Text + "AST construido exitosamente\n")
+	ide.outputEntry.SetText(ide.outputEntry.Text + "\nEjecutando programa...\n")
+	ide.outputEntry.SetText(ide.outputEntry.Text + "────────────────────────────\n\n")
 
 	interpreter := ast.NewInterpreter()
 	output, err := interpreter.Interpret(astProgram)
 
 	if err != nil {
-		errorMsg := fmt.Sprintf("❌ Error durante la ejecución: %v\n", err)
+		errorMsg := fmt.Sprintf("Error durante la ejecución: %v\n", err)
 		ide.outputEntry.SetText(ide.outputEntry.Text + errorMsg)
-		fmt.Print(errorMsg) // También mostrar en terminal
-		ide.outputEntry.SetText(ide.outputEntry.Text + "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+		fmt.Print(errorMsg)
+		ide.outputEntry.SetText(ide.outputEntry.Text + "\n────────────────────────────\n")
 		return
 	}
 
 	ide.outputEntry.SetText(ide.outputEntry.Text + output)
 	fmt.Print(output)
-	ide.outputEntry.SetText(ide.outputEntry.Text + "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	ide.outputEntry.SetText(ide.outputEntry.Text + "✅ Ejecución completada\n")
+	ide.outputEntry.SetText(ide.outputEntry.Text + "\n────────────────────────────\n")
+	ide.outputEntry.SetText(ide.outputEntry.Text + "Ejecución completada\n")
 }
 
 func (ide *IDE) showErrors() {
 	var output strings.Builder
-	output.WriteString("❌ Se encontraron errores:\n\n")
+	output.WriteString("Se encontraron errores:\n\n")
 
 	for i, err := range ide.errorTable.Errors {
 		output.WriteString(fmt.Sprintf("[%d] %s\n", i+1, err.String()))
@@ -346,51 +313,20 @@ func (ide *IDE) showErrors() {
 }
 
 func (ide *IDE) showErrorsReport() {
-	if ide.errorTable == nil || !ide.errorTable.HasErrors() {
-		dialog.ShowInformation("Reporte de Errores",
-			"No hay errores para mostrar", ide.window)
+	if ide.errorTable == nil {
+		ide.errorTable = errors.NewErrorTable()
+	}
+
+	html := reports.GenerateErrorReport(ide.errorTable)
+	err := reports.SaveAndOpenReport(html, "error_report.html")
+
+	if err != nil {
+		dialog.ShowError(err, ide.window)
 		return
 	}
 
-	ide.showErrors()
-}
-
-func (ide *IDE) showASTReport() {
-	if ide.astRoot == nil {
-		dialog.ShowInformation("Reporte AST",
-			"No hay AST disponible. Ejecuta el código primero.", ide.window)
-		return
-	}
-
-	if ide.astRoot == nil {
-		fmt.Println("AST es nil")
-		return
-	}
-
-	// Imprimir tipo del nodo raíz
-	fmt.Printf("AST Root Type: %T\n", ide.astRoot)
-
-	// Si es un Program, imprimir el número de statements
-	if program, ok := ide.astRoot.(*ast.Program); ok {
-		fmt.Printf("Program tiene %d statements\n", len(program.Statements))
-		for i, stmt := range program.Statements {
-			fmt.Printf("  Statement %d: %T\n", i, stmt)
-		}
-	}
-
-	// Generar el reporte del AST
-	// html := reports.GenerateASTReport(ide.astRoot)
-
-	// // Guardar el archivo HTML
-	// filename := "ast_report.html"
-	// reports.SaveAndOpenReport(html, filename)
-
-	// // Opcionalmente, generar imagen con Graphviz
-	// dot := reports.GenerateASTDot(ide.astRoot)
-	// reports.GenerateASTImage(dot, "ast_graph.png")
-
-	// dialog.ShowInformation("Reporte AST",
-	// 	"Reporte generado exitosamente en "+filename, ide.window)
+	dialog.ShowInformation("Reporte de Errores",
+		"Reporte generado exitosamente en error_report.html", ide.window)
 }
 
 func (ide *IDE) showSymbolTableReport() {
@@ -400,29 +336,87 @@ func (ide *IDE) showSymbolTableReport() {
 		return
 	}
 
-	// Por ahora, mostrar un mensaje simple
-	dialog.ShowInformation("Tabla de Símbolos",
-		"Generación de tabla de símbolos en desarrollo...", ide.window)
+	html := reports.GenerateSymbolTableReport(ide.symbolTable)
+	err := reports.SaveAndOpenReport(html, "symbol_table_report.html")
 
-	// TODO: Cuando tengas el analizador semántico listo:
-	// html := reports.GenerateSymbolTableReport(ide.symbolTable)
-	// reports.SaveAndOpenReport(html, "symbol_table_report.html")
-}
-
-func (ide *IDE) debugPrintAST() {
-	if ide.astRoot == nil {
-		fmt.Println("AST es nil")
+	if err != nil {
+		dialog.ShowError(err, ide.window)
 		return
 	}
 
-	// Imprimir tipo del nodo raíz
-	fmt.Printf("AST Root Type: %T\n", ide.astRoot)
+	dialog.ShowInformation("Tabla de Símbolos",
+		"Reporte generado exitosamente en symbol_table_report.html", ide.window)
+}
 
-	// Si es un Program, imprimir el número de statements
-	if program, ok := ide.astRoot.(*ast.Program); ok {
-		fmt.Printf("Program tiene %d statements\n", len(program.Statements))
-		for i, stmt := range program.Statements {
-			fmt.Printf("  Statement %d: %T\n", i, stmt)
-		}
+func (ide *IDE) showCSTReport() {
+	code := ide.codeEditor.Text()
+	if code == "" {
+		dialog.ShowInformation("Reporte CST",
+			"No hay código para analizar.", ide.window)
+		return
 	}
+
+	svgContent := cst.CstReport(code)
+	if svgContent == "" {
+		dialog.ShowError(fmt.Errorf("No se pudo generar el reporte CST"), ide.window)
+		return
+	}
+
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte CST - V-Lang Cherry</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 100%%;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #388e3c;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .tree-container {
+            width: 100%%;
+            overflow: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 20px;
+            background-color: #fafafa;
+        }
+        svg {
+            max-width: 100%%;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Árbol de Sintaxis Concreta (CST)</h1>
+        <div class="tree-container">
+            %s
+        </div>
+    </div>
+</body>
+</html>`, svgContent)
+
+	err := reports.SaveAndOpenReport(html, "cst_report.html")
+	if err != nil {
+		dialog.ShowError(err, ide.window)
+		return
+	}
+
+	dialog.ShowInformation("Reporte CST",
+		"Reporte generado exitosamente en cst_report.html", ide.window)
 }
