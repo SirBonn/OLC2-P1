@@ -76,6 +76,8 @@ func (b *ASTBuilder) visitStmt(ctx *parser.StmtContext) ast.Statement {
 		return b.visitPrintStmt(node)
 	case *parser.DeclAssignContext:
 		return b.visitDeclAssign(node)
+	case *parser.DeclAssignTypeContext:
+		return b.visitDeclAssignTypeContext(node)
 	case *parser.DirectAssignContext:
 		return b.visitDirectAssign(node)
 	case *parser.PlusAssignContext:
@@ -225,6 +227,22 @@ func (b *ASTBuilder) visitDeclAssign(ctx *parser.DeclAssignContext) ast.Statemen
 		Type:      "", // Tipo inferido
 		Value:     value,
 		IsMutable: true, // mut keyword
+		Line:      ctx.GetStart().GetLine(),
+		Column:    ctx.GetStart().GetColumn(),
+	}
+}
+
+// === VARIABLE TYPE DECLARATIONS ===
+func (b *ASTBuilder) visitDeclAssignTypeContext(ctx *parser.DeclAssignTypeContext) ast.Statement {
+	name := ctx.ID().GetText()
+	value := b.visitExpresion(ctx.Expresion())
+	varType := b.getVarType(ctx.Var_type())
+
+	return &ast.VarDecl{
+		Name:      name,
+		Type:      varType, // Tipo explícito (ej: "int", "[]float", etc.)
+		Value:     value,
+		IsMutable: ctx.MUT() != nil, // true si tiene la keyword "mut"
 		Line:      ctx.GetStart().GetLine(),
 		Column:    ctx.GetStart().GetColumn(),
 	}
@@ -708,11 +726,13 @@ func (b *ASTBuilder) getVarType(ctx parser.IVar_typeContext) string {
 		return ""
 	}
 
-	switch ctx.(type) {
+	switch v := ctx.(type) {
 	case *parser.IntTypeContext:
 		return "int"
 	case *parser.FloatTypeContext:
-		return "float64"
+		return "float"
+	case *parser.F64TypeContext:
+		return "f64"
 	case *parser.StringTypeContext:
 		return "string"
 	case *parser.BoolTypeContext:
@@ -721,8 +741,11 @@ func (b *ASTBuilder) getVarType(ctx parser.IVar_typeContext) string {
 		return "char"
 	case *parser.VoidTypeContext:
 		return "void"
+	case *parser.ArrayTypeContext:
+		elementType := b.getVarType(v.Var_type())
+		return "[]" + elementType
 	default:
-		return ""
+		return "Tipo de dato no soportado"
 	}
 }
 
