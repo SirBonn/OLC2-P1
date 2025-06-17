@@ -119,8 +119,30 @@ func (i *Interpreter) Interpret(program *Program) (string, error) {
 	for name, _ := range i.env.functions {
 		fmt.Printf("   - %s\n", name)
 	}
+	fmt.Printf("FASE 2: Buscando función main...\n")
+	if mainFunc, exists := i.env.GetFunction("main"); exists {
+		fmt.Printf("✅ Función main encontrada, ejecutando...\n")
 
-	fmt.Printf("FASE 2: Ejecutando statements no-función...\n")
+		// Crear nuevo entorno para la función main
+		mainEnv := NewEnvironment(i.env)
+		oldEnv := i.env
+		i.env = mainEnv
+		defer func() { i.env = oldEnv }()
+
+		// Ejecutar cuerpo de la función main
+		for _, stmt := range mainFunc.Body {
+			err := i.executeStatement(stmt)
+			if err != nil {
+				return i.output.String(), err
+			}
+			if i.shouldExit {
+				break
+			}
+		}
+	} else {
+		fmt.Printf("⚠️ No se encontró función main\n")
+	}
+	fmt.Printf("FASE 3: Ejecutando statements no-función...\n")
 
 	// Luego ejecutar los statements que no son declaraciones de función
 	statementCount := 0
@@ -292,33 +314,27 @@ func (i *Interpreter) executeAssignment(stmt *Assignment) error {
 
 // executeIfStmt ejecuta un statement if
 func (i *Interpreter) executeIfStmt(stmt *IfStmt) error {
+	fmt.Printf("Evaluando condición del if en línea %d\n", stmt.Line)
 	condition, err := i.evaluateExpression(stmt.Condition)
 	if err != nil {
 		return err
 	}
-
 	if i.isTruthy(condition) {
 		for _, s := range stmt.ThenBranch {
-			err := i.executeStatement(s)
-			if err != nil {
+			if err := i.executeStatement(s); err != nil {
 				return err
-			}
-			if i.shouldExit || i.shouldBreak || i.shouldContinue {
-				break
 			}
 		}
+	} else if stmt.ElseIf != nil {
+		fmt.Println("Ejecutando ELSE IF...")
+		return i.executeIfStmt(stmt.ElseIf)
 	} else if len(stmt.ElseBranch) > 0 {
 		for _, s := range stmt.ElseBranch {
-			err := i.executeStatement(s)
-			if err != nil {
+			if err := i.executeStatement(s); err != nil {
 				return err
-			}
-			if i.shouldExit || i.shouldBreak || i.shouldContinue {
-				break
 			}
 		}
 	}
-
 	return nil
 }
 

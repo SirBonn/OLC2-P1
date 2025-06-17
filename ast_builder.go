@@ -155,36 +155,64 @@ func (b *ASTBuilder) VisitElse_stmt(ctx *parser.ElseStmtContext) interface{} {
 }
 
 func (b *ASTBuilder) visitIfStmt(ctx *parser.IfStmtContext) ast.Statement {
-	// Obtener la primera cadena if con type assertion
-	firstChain := ctx.If_chain(0)
-
-	// Convertir de interface a tipo concreto
-	var condition ast.Expression
-	var thenBranch []ast.Statement
-
-	// Usar el visitor genérico para if_chain
-	chainResult := b.Visit(firstChain)
-	if ifChainNode, ok := chainResult.(*IfChainNode); ok {
-		condition = ifChainNode.Condition
-		thenBranch = ifChainNode.Statements
+	if len(ctx.AllIf_chain()) == 0 {
+		b.addError("if statement has no condition")
+		return nil
 	}
 
-	// Procesar else si existe
-	elseBranch := make([]ast.Statement, 0)
-	if ctx.Else_stmt() != nil {
-		elseResult := b.Visit(ctx.Else_stmt())
-		if elseNode, ok := elseResult.(*ElseNode); ok {
-			elseBranch = elseNode.Statements
+	// Procesar el if principal (primera cadena)
+	ifStmt := b.buildIfChain(ctx.If_chain(0).(*parser.IfChainContext))
+	if ifStmt == nil {
+		return nil
+	}
+
+	// Procesar else ifs (cadenas adicionales)
+	currentIf := ifStmt
+	for _, chainCtx := range ctx.AllIf_chain()[1:] {
+		elseIfStmt := b.buildIfChain(chainCtx.(*parser.IfChainContext))
+		if elseIfStmt == nil {
+			continue
 		}
+		currentIf.ElseIf = elseIfStmt
+		currentIf = elseIfStmt
+	}
+
+	// Procesar else (si existe)
+	if ctx.Else_stmt() != nil {
+		elseStmt := ctx.Else_stmt().(*parser.ElseStmtContext)
+		currentIf.ElseBranch = b.processStatements(elseStmt.AllStmt())
+	}
+
+	return ifStmt
+}
+
+// Función auxiliar para construir un nodo IfStmt a partir de una if_chain
+func (b *ASTBuilder) buildIfChain(chainCtx *parser.IfChainContext) *ast.IfStmt {
+	condition := b.visitExpresion(chainCtx.Expresion())
+	if condition == nil {
+		b.addError("invalid condition in if chain")
+		return nil
 	}
 
 	return &ast.IfStmt{
 		Condition:  condition,
-		ThenBranch: thenBranch,
-		ElseBranch: elseBranch,
-		Line:       ctx.GetStart().GetLine(),
-		Column:     ctx.GetStart().GetColumn(),
+		ThenBranch: b.processStatements(chainCtx.AllStmt()),
+		ElseBranch: nil, // Se llena luego si hay else
+		ElseIf:     nil, // Se llena luego si hay else if
+		Line:       chainCtx.GetStart().GetLine(),
+		Column:     chainCtx.GetStart().GetColumn(),
 	}
+}
+
+// Procesa una lista de stmtContext y devuelve Statements
+func (b *ASTBuilder) processStatements(stmtCtxs []parser.IStmtContext) []ast.Statement {
+	statements := make([]ast.Statement, 0)
+	for _, stmtCtx := range stmtCtxs {
+		if stmt := b.visitStmt(stmtCtx.(*parser.StmtContext)); stmt != nil {
+			statements = append(statements, stmt)
+		}
+	}
+	return statements
 }
 
 // === PRINT STATEMENTS ===
@@ -406,7 +434,6 @@ func (b *ASTBuilder) visitExpresion(ctx parser.IExpresionContext) ast.Expression
 	if ctx == nil {
 		return nil
 	}
-
 	switch expr := ctx.(type) {
 	case *parser.ValorexpresionContext:
 		return b.visitValorExpresion(expr)
@@ -432,7 +459,6 @@ func (b *ASTBuilder) visitExpresion(ctx parser.IExpresionContext) ast.Expression
 
 func (b *ASTBuilder) visitValorExpresion(ctx *parser.ValorexpresionContext) ast.Expression {
 	valor := ctx.Valor()
-
 	switch v := valor.(type) {
 	case *parser.ValorEnteroContext:
 		return b.visitValorEntero(v)
