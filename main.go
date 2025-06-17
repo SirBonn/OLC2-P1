@@ -22,16 +22,113 @@ import (
 	"github.com/antlr4-go/antlr/v4"
 )
 
+type LineNumberedEditor struct {
+	widget.BaseWidget
+	entry       *widget.Entry
+	lineNumbers *widget.Label
+	container   *fyne.Container
+}
+
+// NewLineNumberedEditor crea una nueva instancia del editor con números de línea
+func NewLineNumberedEditor() *LineNumberedEditor {
+	editor := &LineNumberedEditor{}
+	editor.ExtendBaseWidget(editor)
+
+	// Crear el editor de texto
+	editor.entry = widget.NewMultiLineEntry()
+	editor.entry.Wrapping = fyne.TextWrapOff // Desactivar wrap para mejor alineación
+	editor.entry.SetPlaceHolder("// Escribe tu código V-Lang Cherry aquí...")
+
+	// Crear el widget de números de línea usando Label simple
+	editor.lineNumbers = widget.NewLabel("1")
+	editor.lineNumbers.Alignment = fyne.TextAlignTrailing // Alinear a la derecha
+
+	// Configurar el callback para actualizar los números cuando el texto cambie
+	editor.entry.OnChanged = func(text string) {
+		editor.updateLineNumbers(text)
+	}
+
+	// Configurar tamaño fijo para los números de línea
+	editor.lineNumbers.Resize(fyne.NewSize(60, 0)) // Ancho fijo de 60 píxeles
+
+	// Crear el contenedor usando Border para mejor control de tamaño
+	editor.container = container.NewBorder(
+		nil, nil, // top, bottom
+		editor.lineNumbers, nil, // left, right
+		editor.entry, // center (toma el espacio restante)
+	)
+
+	// Inicializar con la primera línea
+	editor.updateLineNumbers("")
+
+	return editor
+}
+
+// updateLineNumbers actualiza los números de línea basándose en el contenido
+func (e *LineNumberedEditor) updateLineNumbers(text string) {
+	lines := strings.Split(text, "\n")
+	if len(lines) == 0 {
+		lines = []string{""}
+	}
+
+	// Construir los números de línea
+	var lineNumbers []string
+	for i := 1; i <= len(lines); i++ {
+		lineNumbers = append(lineNumbers, fmt.Sprintf("%3d", i))
+	}
+
+	// Actualizar el label de números de línea
+	numbersText := strings.Join(lineNumbers, "\n")
+	e.lineNumbers.SetText(numbersText)
+}
+
+// CreateRenderer implementa la interfaz fyne.Widget
+func (e *LineNumberedEditor) CreateRenderer() fyne.WidgetRenderer {
+	return widget.NewSimpleRenderer(e.container)
+}
+
+// Métodos para exponer la funcionalidad del Entry subyacente
+func (e *LineNumberedEditor) SetText(text string) {
+	e.entry.SetText(text)
+}
+
+func (e *LineNumberedEditor) Text() string {
+	return e.entry.Text
+}
+
+func (e *LineNumberedEditor) SetPlaceHolder(placeholder string) {
+	e.entry.SetPlaceHolder(placeholder)
+}
+
+func (e *LineNumberedEditor) Disable() {
+	e.entry.Disable()
+}
+
+func (e *LineNumberedEditor) Enable() {
+	e.entry.Enable()
+}
+
+// Método para establecer callback de cambio de texto
+func (e *LineNumberedEditor) OnChanged(callback func(string)) {
+	originalCallback := e.entry.OnChanged
+	e.entry.OnChanged = func(text string) {
+		originalCallback(text) // Mantener la actualización de números
+		if callback != nil {
+			callback(text) // Llamar al callback personalizado
+		}
+	}
+}
+
 type IDE struct {
 	window      fyne.Window
-	codeEntry   *widget.Entry
+	codeEditor  *LineNumberedEditor // Cambiar de codeEntry a codeEditor
 	outputEntry *widget.Entry
 	currentFile string
 	app         fyne.App
 	// Componentes para reportes
 	errorTable  *errors.ErrorTable
-	symbolTable interface{} // Por ahora interface{}, después será *semantic.SymbolTable
-	astRoot     ast.Node    // Por ahora interface{}, después será ast.Node
+	symbolTable interface{}
+	astRoot     ast.Node
 }
 
 func main() {
@@ -54,19 +151,17 @@ func main() {
 }
 
 func (ide *IDE) createMainContent() fyne.CanvasObject {
-	// Editor de código
-	ide.codeEntry = widget.NewMultiLineEntry()
-	ide.codeEntry.Wrapping = fyne.TextTruncate
-	ide.codeEntry.SetPlaceHolder("// Escribe tu código V-Lang Cherry aquí...")
+	// Usar el nuevo editor con números de línea
+	ide.codeEditor = NewLineNumberedEditor()
 
-	// Consola de salida
+	// Consola de salida (mantener como está)
 	ide.outputEntry = widget.NewMultiLineEntry()
 	ide.outputEntry.Wrapping = fyne.TextWrapWord
 	ide.outputEntry.Disable()
 
 	// Tabs
 	tabs := container.NewAppTabs(
-		container.NewTabItem("📝 Editor", container.NewVScroll(ide.codeEntry)),
+		container.NewTabItem("📝 Editor", container.NewVScroll(ide.codeEditor)),
 		container.NewTabItem("🖥️ Consola", container.NewVScroll(ide.outputEntry)),
 	)
 
@@ -75,7 +170,6 @@ func (ide *IDE) createMainContent() fyne.CanvasObject {
 
 	return container.NewBorder(toolbar, nil, nil, nil, tabs)
 }
-
 func (ide *IDE) createMenu() *fyne.MainMenu {
 	// Menú Archivo
 	fileMenu := fyne.NewMenu("Archivo",
@@ -112,7 +206,7 @@ func (ide *IDE) createToolbar() fyne.CanvasObject {
 
 // Funciones de archivo
 func (ide *IDE) newFile() {
-	ide.codeEntry.SetText("")
+	ide.codeEditor.SetText("")
 	ide.currentFile = ""
 	ide.outputEntry.SetText("")
 }
@@ -130,7 +224,7 @@ func (ide *IDE) openFile() {
 			return
 		}
 
-		ide.codeEntry.SetText(string(data))
+		ide.codeEditor.SetText(string(data))
 		ide.currentFile = reader.URI().Path()
 	}, ide.window)
 }
@@ -141,7 +235,7 @@ func (ide *IDE) saveFile() {
 		return
 	}
 
-	err := ioutil.WriteFile(ide.currentFile, []byte(ide.codeEntry.Text), 0644)
+	err := ioutil.WriteFile(ide.currentFile, []byte(ide.codeEditor.Text()), 0644)
 	if err != nil {
 		dialog.ShowError(err, ide.window)
 	}
@@ -154,7 +248,7 @@ func (ide *IDE) saveFileAs() {
 		}
 		defer writer.Close()
 
-		_, err = writer.Write([]byte(ide.codeEntry.Text))
+		_, err = writer.Write([]byte(ide.codeEditor.Text()))
 		if err != nil {
 			dialog.ShowError(err, ide.window)
 			return
@@ -165,7 +259,7 @@ func (ide *IDE) saveFileAs() {
 }
 
 func (ide *IDE) runCode() {
-	code := ide.codeEntry.Text
+	code := ide.codeEditor.Text()
 	ide.outputEntry.SetText("🔄 Compilando...\n\n")
 
 	// === FASE 1: ANÁLISIS LÉXICO ===

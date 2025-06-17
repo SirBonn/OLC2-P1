@@ -119,8 +119,30 @@ func (i *Interpreter) Interpret(program *Program) (string, error) {
 	for name, _ := range i.env.functions {
 		fmt.Printf("   - %s\n", name)
 	}
+	fmt.Printf("FASE 2: Buscando función main...\n")
+	if mainFunc, exists := i.env.GetFunction("main"); exists {
+		fmt.Printf("✅ Función main encontrada, ejecutando...\n")
 
-	fmt.Printf("FASE 2: Ejecutando statements no-función...\n")
+		// Crear nuevo entorno para la función main
+		mainEnv := NewEnvironment(i.env)
+		oldEnv := i.env
+		i.env = mainEnv
+		defer func() { i.env = oldEnv }()
+
+		// Ejecutar cuerpo de la función main
+		for _, stmt := range mainFunc.Body {
+			err := i.executeStatement(stmt)
+			if err != nil {
+				return i.output.String(), err
+			}
+			if i.shouldExit {
+				break
+			}
+		}
+	} else {
+		fmt.Printf("⚠️ No se encontró función main\n")
+	}
+	fmt.Printf("FASE 3: Ejecutando statements no-función...\n")
 
 	// Luego ejecutar los statements que no son declaraciones de función
 	statementCount := 0
