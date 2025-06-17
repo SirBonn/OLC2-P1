@@ -292,33 +292,27 @@ func (i *Interpreter) executeAssignment(stmt *Assignment) error {
 
 // executeIfStmt ejecuta un statement if
 func (i *Interpreter) executeIfStmt(stmt *IfStmt) error {
+	fmt.Printf("Evaluando condición del if en línea %d\n", stmt.Line)
 	condition, err := i.evaluateExpression(stmt.Condition)
 	if err != nil {
 		return err
 	}
-
 	if i.isTruthy(condition) {
 		for _, s := range stmt.ThenBranch {
-			err := i.executeStatement(s)
-			if err != nil {
+			if err := i.executeStatement(s); err != nil {
 				return err
-			}
-			if i.shouldExit || i.shouldBreak || i.shouldContinue {
-				break
 			}
 		}
+	} else if stmt.ElseIf != nil {
+		fmt.Println("Ejecutando ELSE IF...")
+		return i.executeIfStmt(stmt.ElseIf)
 	} else if len(stmt.ElseBranch) > 0 {
 		for _, s := range stmt.ElseBranch {
-			err := i.executeStatement(s)
-			if err != nil {
+			if err := i.executeStatement(s); err != nil {
 				return err
-			}
-			if i.shouldExit || i.shouldBreak || i.shouldContinue {
-				break
 			}
 		}
 	}
-
 	return nil
 }
 
