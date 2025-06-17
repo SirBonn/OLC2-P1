@@ -8,6 +8,19 @@ type SemanticAnalyzer struct {
 	symbolTable *SymbolTable
 }
 
+var builtinFunctions = map[string]struct {
+	Parameters int
+	ReturnType string
+}{
+	"int":         {Parameters: 1, ReturnType: "int"},
+	"float":       {Parameters: 1, ReturnType: "f64"},
+	"string":      {Parameters: 1, ReturnType: "string"},
+	"atoi":        {Parameters: 1, ReturnType: "int"},
+	"parse_float": {Parameters: 1, ReturnType: "f64"},
+	"TypeOf":      {Parameters: 1, ReturnType: "string"},
+	"len":         {Parameters: 1, ReturnType: "int"},
+}
+
 func NewSemanticAnalyzer() *SemanticAnalyzer {
 	return &SemanticAnalyzer{
 		symbolTable: NewSymbolTable(),
@@ -356,6 +369,22 @@ func (sa *SemanticAnalyzer) analyzeUnaryExpr(expr *UnaryExpr) string {
 }
 
 func (sa *SemanticAnalyzer) analyzeFuncCall(funcCall *FuncCall) string {
+
+	if builtin, isBuiltin := builtinFunctions[funcCall.Name]; isBuiltin {
+		// Verificar número de argumentos
+		if len(funcCall.Arguments) != builtin.Parameters {
+			sa.symbolTable.AddError(fmt.Sprintf("builtin function '%s' expects %d arguments, got %d at line %d",
+				funcCall.Name, builtin.Parameters, len(funcCall.Arguments), funcCall.Line))
+		}
+
+		// Analizar argumentos
+		for _, arg := range funcCall.Arguments {
+			sa.analyzeExpression(arg)
+		}
+
+		return builtin.ReturnType
+	}
+
 	symbol, exists := sa.symbolTable.Lookup(funcCall.Name)
 	if !exists {
 		sa.symbolTable.AddError(fmt.Sprintf("undefined function '%s' at line %d",

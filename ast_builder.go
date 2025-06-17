@@ -587,7 +587,7 @@ func (b *ASTBuilder) visitValorFloat(ctx *parser.ValorFloatContext) ast.Expressi
 
 	return &ast.Literal{
 		Value:  val,
-		Type:   "float64",
+		Type:   "f64",
 		Line:   ctx.GetStart().GetLine(),
 		Column: ctx.GetStart().GetColumn(),
 	}
@@ -602,14 +602,13 @@ func (b *ASTBuilder) visitValorDecimal(ctx *parser.ValorDecimalContext) ast.Expr
 
 	return &ast.Literal{
 		Value:  val,
-		Type:   "float64",
+		Type:   "f64",
 		Line:   ctx.GetStart().GetLine(),
 		Column: ctx.GetStart().GetColumn(),
 	}
 }
 
 func (b *ASTBuilder) visitValorCadena(ctx *parser.ValorCadenaContext) ast.Expression {
-	// Remover comillas y procesar escapes
 	text := ctx.GetText()
 	text = text[1 : len(text)-1] // Remover comillas
 

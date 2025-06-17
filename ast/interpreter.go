@@ -13,20 +13,31 @@ type Value struct {
 	Type  string
 }
 
+type BuiltinFunc func(args []Value) (Value, error)
+
 // Environment representa el entorno de ejecución
 type Environment struct {
 	parent    *Environment
 	variables map[string]Value
 	functions map[string]*FuncDecl
+	builtins  map[string]BuiltinFunc
 }
 
 // NewEnvironment crea un nuevo entorno
 func NewEnvironment(parent *Environment) *Environment {
-	return &Environment{
+	env := &Environment{
 		parent:    parent,
 		variables: make(map[string]Value),
 		functions: make(map[string]*FuncDecl),
+		builtins:  make(map[string]BuiltinFunc),
 	}
+
+	// Solo registrar builtins en el ambiente global
+	if parent == nil {
+		env.registerBuiltins()
+	}
+
+	return env
 }
 
 // Set establece una variable en el entorno
@@ -532,18 +543,36 @@ func (i *Interpreter) evaluateUnaryExpr(expr *UnaryExpr) (Value, error) {
 
 // evaluateFuncCall evalúa una llamada a función
 func (i *Interpreter) evaluateFuncCall(expr *FuncCall) (Value, error) {
-	fmt.Printf("📞 Evaluando llamada a función: %s con %d argumentos\n", expr.Name, len(expr.Arguments))
+	// Primero buscar en funciones nativas
+	if builtin, exists := i.env.GetBuiltin(expr.Name); exists {
+		fmt.Printf("📞 Llamando función nativa: %s\n", expr.Name)
 
+		// Evaluar argumentos
+		args := make([]Value, len(expr.Arguments))
+		for idx, arg := range expr.Arguments {
+			value, err := i.evaluateExpression(arg)
+			if err != nil {
+				return Value{}, err
+			}
+			args[idx] = value
+		}
+
+		// Llamar a la función nativa
+		return builtin(args)
+	}
+
+	// Si no es builtin, buscar función definida por el usuario
 	fn, exists := i.env.GetFunction(expr.Name)
 	if !exists {
 		return Value{}, fmt.Errorf("undefined function: %s at line %d, column %d",
 			expr.Name, expr.Line, expr.Column)
 	}
 
+	// ... resto del código existente para funciones de usuario ...
+
 	// Evaluar argumentos
 	args := make([]Value, len(expr.Arguments))
 	for idx, arg := range expr.Arguments {
-		fmt.Printf("   Evaluando argumento %d: %T\n", idx, arg)
 		value, err := i.evaluateExpression(arg)
 		if err != nil {
 			return Value{}, fmt.Errorf("error evaluating argument %d: %v", idx, err)
@@ -565,15 +594,12 @@ func (i *Interpreter) evaluateFuncCall(expr *FuncCall) (Value, error) {
 
 	// Establecer parámetros
 	for idx, param := range fn.Parameters {
-		fmt.Printf("   Estableciendo parámetro %s = %v\n", param.Name, args[idx].Value)
 		i.env.Set(param.Name, args[idx])
 	}
 
 	// Ejecutar cuerpo de la función
 	oldShouldExit := i.shouldExit
 	i.shouldExit = false
-
-	fmt.Printf("   Ejecutando cuerpo de función %s con %d statements\n", expr.Name, len(fn.Body))
 
 	for _, stmt := range fn.Body {
 		err := i.executeStatement(stmt)
@@ -589,7 +615,6 @@ func (i *Interpreter) evaluateFuncCall(expr *FuncCall) (Value, error) {
 	i.shouldExit = oldShouldExit
 	i.returnVal = Value{}
 
-	fmt.Printf("   Función %s retornó: %v\n", expr.Name, result.Value)
 	return result, nil
 }
 
@@ -942,4 +967,195 @@ func (i *Interpreter) evaluateArrayLiteral(expr *ArrayLiteral) (Value, error) {
 	}
 
 	return Value{Value: elements, Type: "array"}, nil
+}
+
+func (env *Environment) registerBuiltins() {
+	// Conversión de tipos
+	env.builtins["int"] = builtinInt
+	env.builtins["float"] = builtinFloat
+	env.builtins["string"] = builtinString
+
+	// Funciones adicionales
+	env.builtins["atoi"] = builtinAtoi
+	env.builtins["parse_float"] = builtinParseFloat
+	env.builtins["TypeOf"] = builtinTypeOf
+	env.builtins["len"] = builtinLen
+}
+
+func builtinInt(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return Value{}, fmt.Errorf("int() expects exactly 1 argument, got %d", len(args))
+	}
+
+	arg := args[0]
+	switch v := arg.Value.(type) {
+	case string:
+		// Intentar parsear como float primero para manejar decimales
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return Value{}, fmt.Errorf("cannot convert '%s' to int", v)
+		}
+		return Value{Value: int(f), Type: "int"}, nil
+	case float64:
+		return Value{Value: int(v), Type: "int"}, nil
+	case int:
+		return arg, nil // Ya es int
+	default:
+		return Value{}, fmt.Errorf("int() cannot convert %T to int", v)
+	}
+}
+
+// Función float() - convierte a float
+func builtinFloat(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return Value{}, fmt.Errorf("float() expects exactly 1 argument, got %d", len(args))
+	}
+
+	arg := args[0]
+	switch v := arg.Value.(type) {
+	case string:
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return Value{}, fmt.Errorf("cannot convert '%s' to float", v)
+		}
+		return Value{Value: f, Type: "float64"}, nil
+	case int:
+		return Value{Value: float64(v), Type: "float64"}, nil
+	case float64:
+		return arg, nil // Ya es float
+	default:
+		return Value{}, fmt.Errorf("float() cannot convert %T to float", v)
+	}
+}
+
+// Función string() - convierte a string
+func builtinString(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return Value{}, fmt.Errorf("string() expects exactly 1 argument, got %d", len(args))
+	}
+
+	arg := args[0]
+	switch v := arg.Value.(type) {
+	case string:
+		return arg, nil // Ya es string
+	case int:
+		return Value{Value: strconv.Itoa(v), Type: "string"}, nil
+	case float64:
+		return Value{Value: strconv.FormatFloat(v, 'g', -1, 64), Type: "string"}, nil
+	case bool:
+		if v {
+			return Value{Value: "true", Type: "string"}, nil
+		}
+		return Value{Value: "false", Type: "string"}, nil
+	default:
+		return Value{Value: fmt.Sprintf("%v", v), Type: "string"}, nil
+	}
+}
+
+// Función atoi() - string a int (compatible con strconv.Atoi)
+func builtinAtoi(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return Value{}, fmt.Errorf("atoi() expects exactly 1 argument, got %d", len(args))
+	}
+
+	arg := args[0]
+	if str, ok := arg.Value.(string); ok {
+		val, err := strconv.Atoi(str)
+		if err != nil {
+			return Value{}, fmt.Errorf("atoi: %v", err)
+		}
+		return Value{Value: val, Type: "int"}, nil
+	}
+
+	return Value{}, fmt.Errorf("atoi() expects string argument, got %T", arg.Value)
+}
+
+// Función parse_float() - string a float
+func builtinParseFloat(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return Value{}, fmt.Errorf("parse_float() expects exactly 1 argument, got %d", len(args))
+	}
+
+	arg := args[0]
+	if str, ok := arg.Value.(string); ok {
+		val, err := strconv.ParseFloat(str, 64)
+		if err != nil {
+			return Value{}, fmt.Errorf("parse_float: %v", err)
+		}
+		return Value{Value: val, Type: "float64"}, nil
+	}
+
+	return Value{}, fmt.Errorf("parse_float() expects string argument, got %T", arg.Value)
+}
+
+// Función TypeOf() - retorna el tipo de un valor
+func builtinTypeOf(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return Value{}, fmt.Errorf("TypeOf() expects exactly 1 argument, got %d", len(args))
+	}
+
+	arg := args[0]
+	typeStr := arg.Type
+
+	// Manejar casos especiales
+	switch arg.Value.(type) {
+	case []interface{}:
+		// Para arrays, incluir el tipo de elemento si es posible
+		if arr, ok := arg.Value.([]interface{}); ok && len(arr) > 0 {
+			// Inferir tipo del primer elemento
+			firstElem := Value{Value: arr[0]}
+			elemType := getTypeString(firstElem)
+			typeStr = "[]" + elemType
+		} else {
+			typeStr = "[]unknown"
+		}
+	}
+
+	return Value{Value: typeStr, Type: "string"}, nil
+}
+
+// Función len() - longitud de strings o arrays
+func builtinLen(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return Value{}, fmt.Errorf("len() expects exactly 1 argument, got %d", len(args))
+	}
+
+	arg := args[0]
+	switch v := arg.Value.(type) {
+	case string:
+		return Value{Value: len(v), Type: "int"}, nil
+	case []interface{}:
+		return Value{Value: len(v), Type: "int"}, nil
+	default:
+		return Value{}, fmt.Errorf("len() expects string or array, got %T", v)
+	}
+}
+
+// Función auxiliar para obtener el tipo como string
+func getTypeString(v Value) string {
+	switch v.Value.(type) {
+	case int:
+		return "int"
+	case float64:
+		return "f64"
+	case string:
+		return "string"
+	case bool:
+		return "bool"
+	default:
+		return "unknown"
+	}
+}
+
+// 6. Actualizar GetFunction para buscar también en builtins
+
+// 7. Agregar método para obtener builtin
+func (env *Environment) GetBuiltin(name string) (BuiltinFunc, bool) {
+	if fn, exists := env.builtins[name]; exists {
+		return fn, true
+	}
+	if env.parent != nil {
+		return env.parent.GetBuiltin(name)
+	}
+	return nil, false
 }
