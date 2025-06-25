@@ -64,29 +64,13 @@ func (a *IVORArray) Add(other IVOR) (IVOR, bool, string) {
 	return nil, false, "cannot concatenate array with " + other.Type()
 }
 
-// func (a *IVORArray) Equals(other IVOR) (IVOR, bool, string) {
-//     if otherArr, ok := other.(*IVORArray); ok {
-//         if len(a.Elements) != len(otherArr.Elements) {
-//             return NewBoolValue(false), true, ""
-//         }
-//         for i := range a.Elements {
-//             eq, ok, _ := a.Elements[i].Equals(otherArr.Elements[i])
-//             if !ok || !eq.(*BoolValue).InternalValue {
-//                 return NewBoolValue(false), true, ""
-//             }
-//         }
-//         return NewBoolValue(true), true, ""
-//     }
-//     return NewBoolValue(false), true, ""
-// }
-
-// func (a *IVORArray) NotEquals(other IVOR) (IVOR, bool, string) {
-//     res, ok, msg := a.Equals(other)
-//     if !ok {
-//         return nil, false, msg
-//     }
-//     return NewBoolValue(!res.(*BoolValue).InternalValue), true, ""
-// }
+func (a *IVORArray) Type() string {
+	if len(a.Elements) == 0 {
+		return "[]" // Array vacío sin tipo específico
+	}
+	// Retornar el tipo del primer elemento
+	return "[]" + a.Elements[0].Type()
+}
 
 // Unsupported operations for arrays
 func (a *IVORArray) Subtract(other IVOR) (IVOR, bool, string) {

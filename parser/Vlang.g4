@@ -1,23 +1,17 @@
 //gramatica completa Vlang.g4
 grammar Vlang; 
 
-
 // === Axioma principal ===
-
 programa: (stmt)+ EOF;
-
-/*
-Desde el codigo vamos a recorrer Stmt y vamos 
-a ver de que tipo es cada uno entonces, no podemos 
-darle una etiqueta a cada uno 
- */
 
 stmt:
 	 decl_stmt                
 	 | assign_stmt
      | if_stmt
      | while_stmt  
-     | for_stmt
+     | for_stmt                 // FOR ORIGINAL: for ID in expresion/range
+     | for_enhanced_stmt        // NUEVOS TIPOS DE FOR
+     | switch_stmt              // NUEVO: switch statement
      | func_call 
 	 | func_dcl
      | struct_dcl
@@ -38,16 +32,61 @@ print: 'print'  LPAREN expresion (COMMA expresion)* RPAREN # PrintStmt;
 
 while_stmt: WHILE_KW expresion LCOR stmt* RCOR # WhileStmt;
 
+// === FOR ORIGINAL (mantener compatibilidad) ===
 for_stmt:
 	FOR_KW ID IN_KW (expresion | range) LCOR stmt* RCOR # ForStmt;
 
-range: expresion DOT DOT DOT expresion # NumericRange;
+// === NUEVOS TIPOS DE FOR ===
+for_enhanced_stmt:
+    // Tipo 1: for condición { }
+    FOR_KW expresion LCOR stmt* RCOR                                    # ForCondition
+    
+    // Tipo 2: for inicialización; condición; incremento { }
+    | FOR_KW for_init? SEMICOLON expresion? SEMICOLON for_update? LCOR stmt* RCOR    # ForClassic
+    
+    // Tipo 3: for índice, valor in slice { }
+    | FOR_KW ID COMMA ID IN_KW expresion LCOR stmt* RCOR               # ForIndexValue
+    
+    // Tipo 4: for infinito { }
+    | FOR_KW LCOR stmt* RCOR                                           # ForInfinite
+    
+    // NUEVO: Tipo 5: for índice, valor = range expresion { } - PARA ARRAYS
+    | FOR_KW ID COMMA ID ASSIGN 'range' expresion LCOR stmt* RCOR     # ForRange
+    ;
 
+// === AUXILIARES PARA FOR CLÁSICO ===
+for_init:
+    decl_stmt       // mut i = 0
+    | assign_stmt   // i = 0
+    ;
+
+for_update:
+    assign_stmt     // i = i + 1, i += 1
+    | incredecre    // i++, i--
+    ;
+
+// === SWITCH STATEMENT ===
+switch_stmt:
+    SWITCH_KW expresion? LCOR switch_case* default_case? RCOR          # SwitchStmt
+    ;
+
+switch_case:
+    CASE_KW case_values COLON stmt*                                    # SwitchCase
+    ;
+
+case_values:
+    expresion (COMMA expresion)*                                       # CaseValueList
+    ;
+
+default_case:
+    DEFAULT_KW COLON stmt*                                             # DefaultCase
+    ;
+
+range: expresion DOT DOT DOT expresion # NumericRange;
 
 /// Llamadas a funciones catch
 // id ( 1,2,3,4)
 func_call: id_pattern LPAREN (parametros)? RPAREN # FuncCall;
-
 
 func_dcl: 
     // id(parametros | vacio )  { } 
@@ -55,7 +94,6 @@ func_dcl:
     // fn id (x int, n string) 
     'fn' ID LPAREN (arg_list)? RPAREN (var_type)? LCOR stmt* RCOR # FuncDecl
     ;
-
 
 /*struct 
 <NombreStruct> {
@@ -78,11 +116,13 @@ struct_field:
     var_type ID # StructField
     ;
 
+// === TRANSFER STATEMENTS (ACTUALIZADO) ===
 transfer_stmt:
-	RETURN_KW expresion?	# ReturnStmt
-	| BREAK_KW		# BreakStmt
-	| CONTINUE_KW	# ContinueStmt;
-
+	RETURN_KW expresion?	                    # ReturnStmt
+	| BREAK_KW ID?                              # BreakStmt      // break o break label
+	| CONTINUE_KW ID?                           # ContinueStmt   // continue o continue label
+    | FALLTHROUGH_KW                            # FallthroughStmt // Para switch
+    ;
 
 assign_stmt:
 	id_pattern ASSIGN expresion  	# DirectAssign
@@ -96,10 +136,19 @@ assign_stmt:
 decl_stmt: 
     MUT ID ASSIGN expresion # DeclAssign
     | MUT ID var_type ASSIGN expresion # DeclAssignType
+    // NUEVO: Declaración sin inicialización
+    | MUT ID var_type # DeclType
+    // NUEVO: Declaración de arrays
+    | ID ASSIGN array_literal # ArrayAssign
     ; 
 
+// NUEVA REGLA: Para literales de arrays
+array_literal:
+    LBRACK RBRACK var_type LCOR (expresion (COMMA expresion)*)? RCOR # ArrayLiteral
+    ;
 
 id_pattern: ID (DOT ID)* # IdPattern;
+
 // === Reglas de expresiones ===
 expresion
     : valor                                                #valorexpresion        
@@ -148,11 +197,9 @@ func_arg: (ID COLON)? (ANPERSAND)? (id_pattern | expr) # FuncArg; //
 // PARAMETROS -> Cuando se hace la llamada
 // Argumentos -> Cuando se declara la funcion catch
 
-
 // === Parámetros en llamadas ===
 parametros: func_param (COMMA func_param)* # ParamList;
 func_param : expresion #funcParam;
-
 
 // ===== Argumentos en las declaraciones === catch
 // -----> ArgList
@@ -160,7 +207,6 @@ func_param : expresion #funcParam;
 arg_list: func_arg (COMMA func_arg)* # ArgList;
 func_arg: ID var_type # FuncArg; // 
               
- 
 // === Tipos de valores simples ===
 valores : valor ;
 
@@ -224,6 +270,7 @@ LEN     : 'len' ;
 CAP     : 'cap' ;
 APPEND  : 'append' ;
 MUT     : 'mut' ;
+
 // === Literales ===
 BOOLEANO : 'true' | 'false' ;
 ENTERO   : [0-9]+ ;
@@ -234,9 +281,6 @@ CARACTER : '\'' . '\'' ;
 STRING_INTERPOLATION : '"' (~["\\$] | '\\' . | '$' ~[{] | '$' '{' (~[}])* '}')* '"' ;
 
 // === Identificadores ===
-
-
-
 IF_KW : 'if' ;
 ELSE_KW : 'else' ;
 WHILE_KW : 'while' ;
@@ -245,7 +289,15 @@ IN_KW : 'in' ;
 RETURN_KW : 'return' ;
 BREAK_KW : 'break' ;
 CONTINUE_KW : 'continue' ;
+
+// === NUEVOS TOKENS PARA SWITCH ===
+SWITCH_KW : 'switch' ;
+CASE_KW : 'case' ;
+DEFAULT_KW : 'default' ;
+FALLTHROUGH_KW : 'fallthrough' ;
+
 ID : [a-zA-Z_][a-zA-Z0-9_]* ;
+
 // === Operadores ===
 PLUS    : '+' ;
 MINUS   : '-' ;
@@ -270,6 +322,7 @@ MUL_ASSIGN : '*=' ;
 DIV_ASSIGN : '/=' ;
 MOD_ASSIGN : '%=' ;
 COLON  : ':' ;
+SEMICOLON : ';' ;
 
 // === Símbolos ===
 LPAREN  : '(' ;

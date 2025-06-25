@@ -1,5 +1,5 @@
 
-func main() {
+fn main() {
 	mut puntos int = 0
 
 	println("=== Archivo de prueba de funcionalidades intermedias ===")

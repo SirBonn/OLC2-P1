@@ -34,6 +34,39 @@ type VlangListener interface {
 	// EnterForStmt is called when entering the ForStmt production.
 	EnterForStmt(c *ForStmtContext)
 
+	// EnterForCondition is called when entering the ForCondition production.
+	EnterForCondition(c *ForConditionContext)
+
+	// EnterForClassic is called when entering the ForClassic production.
+	EnterForClassic(c *ForClassicContext)
+
+	// EnterForIndexValue is called when entering the ForIndexValue production.
+	EnterForIndexValue(c *ForIndexValueContext)
+
+	// EnterForInfinite is called when entering the ForInfinite production.
+	EnterForInfinite(c *ForInfiniteContext)
+
+	// EnterForRange is called when entering the ForRange production.
+	EnterForRange(c *ForRangeContext)
+
+	// EnterFor_init is called when entering the for_init production.
+	EnterFor_init(c *For_initContext)
+
+	// EnterFor_update is called when entering the for_update production.
+	EnterFor_update(c *For_updateContext)
+
+	// EnterSwitchStmt is called when entering the SwitchStmt production.
+	EnterSwitchStmt(c *SwitchStmtContext)
+
+	// EnterSwitchCase is called when entering the SwitchCase production.
+	EnterSwitchCase(c *SwitchCaseContext)
+
+	// EnterCaseValueList is called when entering the CaseValueList production.
+	EnterCaseValueList(c *CaseValueListContext)
+
+	// EnterDefaultCase is called when entering the DefaultCase production.
+	EnterDefaultCase(c *DefaultCaseContext)
+
 	// EnterNumericRange is called when entering the NumericRange production.
 	EnterNumericRange(c *NumericRangeContext)
 
@@ -58,6 +91,9 @@ type VlangListener interface {
 	// EnterContinueStmt is called when entering the ContinueStmt production.
 	EnterContinueStmt(c *ContinueStmtContext)
 
+	// EnterFallthroughStmt is called when entering the FallthroughStmt production.
+	EnterFallthroughStmt(c *FallthroughStmtContext)
+
 	// EnterDirectAssign is called when entering the DirectAssign production.
 	EnterDirectAssign(c *DirectAssignContext)
 
@@ -81,6 +117,15 @@ type VlangListener interface {
 
 	// EnterDeclAssignType is called when entering the DeclAssignType production.
 	EnterDeclAssignType(c *DeclAssignTypeContext)
+
+	// EnterDeclType is called when entering the DeclType production.
+	EnterDeclType(c *DeclTypeContext)
+
+	// EnterArrayAssign is called when entering the ArrayAssign production.
+	EnterArrayAssign(c *ArrayAssignContext)
+
+	// EnterArrayLiteral is called when entering the ArrayLiteral production.
+	EnterArrayLiteral(c *ArrayLiteralContext)
 
 	// EnterIdPattern is called when entering the IdPattern production.
 	EnterIdPattern(c *IdPatternContext)
@@ -223,6 +268,39 @@ type VlangListener interface {
 	// ExitForStmt is called when exiting the ForStmt production.
 	ExitForStmt(c *ForStmtContext)
 
+	// ExitForCondition is called when exiting the ForCondition production.
+	ExitForCondition(c *ForConditionContext)
+
+	// ExitForClassic is called when exiting the ForClassic production.
+	ExitForClassic(c *ForClassicContext)
+
+	// ExitForIndexValue is called when exiting the ForIndexValue production.
+	ExitForIndexValue(c *ForIndexValueContext)
+
+	// ExitForInfinite is called when exiting the ForInfinite production.
+	ExitForInfinite(c *ForInfiniteContext)
+
+	// ExitForRange is called when exiting the ForRange production.
+	ExitForRange(c *ForRangeContext)
+
+	// ExitFor_init is called when exiting the for_init production.
+	ExitFor_init(c *For_initContext)
+
+	// ExitFor_update is called when exiting the for_update production.
+	ExitFor_update(c *For_updateContext)
+
+	// ExitSwitchStmt is called when exiting the SwitchStmt production.
+	ExitSwitchStmt(c *SwitchStmtContext)
+
+	// ExitSwitchCase is called when exiting the SwitchCase production.
+	ExitSwitchCase(c *SwitchCaseContext)
+
+	// ExitCaseValueList is called when exiting the CaseValueList production.
+	ExitCaseValueList(c *CaseValueListContext)
+
+	// ExitDefaultCase is called when exiting the DefaultCase production.
+	ExitDefaultCase(c *DefaultCaseContext)
+
 	// ExitNumericRange is called when exiting the NumericRange production.
 	ExitNumericRange(c *NumericRangeContext)
 
@@ -247,6 +325,9 @@ type VlangListener interface {
 	// ExitContinueStmt is called when exiting the ContinueStmt production.
 	ExitContinueStmt(c *ContinueStmtContext)
 
+	// ExitFallthroughStmt is called when exiting the FallthroughStmt production.
+	ExitFallthroughStmt(c *FallthroughStmtContext)
+
 	// ExitDirectAssign is called when exiting the DirectAssign production.
 	ExitDirectAssign(c *DirectAssignContext)
 
@@ -270,6 +351,15 @@ type VlangListener interface {
 
 	// ExitDeclAssignType is called when exiting the DeclAssignType production.
 	ExitDeclAssignType(c *DeclAssignTypeContext)
+
+	// ExitDeclType is called when exiting the DeclType production.
+	ExitDeclType(c *DeclTypeContext)
+
+	// ExitArrayAssign is called when exiting the ArrayAssign production.
+	ExitArrayAssign(c *ArrayAssignContext)
+
+	// ExitArrayLiteral is called when exiting the ArrayLiteral production.
+	ExitArrayLiteral(c *ArrayLiteralContext)
 
 	// ExitIdPattern is called when exiting the IdPattern production.
 	ExitIdPattern(c *IdPatternContext)

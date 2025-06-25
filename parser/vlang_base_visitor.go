@@ -43,6 +43,50 @@ func (v *BaseVlangVisitor) VisitForStmt(ctx *ForStmtContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseVlangVisitor) VisitForCondition(ctx *ForConditionContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseVlangVisitor) VisitForClassic(ctx *ForClassicContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseVlangVisitor) VisitForIndexValue(ctx *ForIndexValueContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseVlangVisitor) VisitForInfinite(ctx *ForInfiniteContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseVlangVisitor) VisitForRange(ctx *ForRangeContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseVlangVisitor) VisitFor_init(ctx *For_initContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseVlangVisitor) VisitFor_update(ctx *For_updateContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseVlangVisitor) VisitSwitchStmt(ctx *SwitchStmtContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseVlangVisitor) VisitSwitchCase(ctx *SwitchCaseContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseVlangVisitor) VisitCaseValueList(ctx *CaseValueListContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseVlangVisitor) VisitDefaultCase(ctx *DefaultCaseContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseVlangVisitor) VisitNumericRange(ctx *NumericRangeContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -75,6 +119,10 @@ func (v *BaseVlangVisitor) VisitContinueStmt(ctx *ContinueStmtContext) interface
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseVlangVisitor) VisitFallthroughStmt(ctx *FallthroughStmtContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseVlangVisitor) VisitDirectAssign(ctx *DirectAssignContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -104,6 +152,18 @@ func (v *BaseVlangVisitor) VisitDeclAssign(ctx *DeclAssignContext) interface{} {
 }
 
 func (v *BaseVlangVisitor) VisitDeclAssignType(ctx *DeclAssignTypeContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseVlangVisitor) VisitDeclType(ctx *DeclTypeContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseVlangVisitor) VisitArrayAssign(ctx *ArrayAssignContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseVlangVisitor) VisitArrayLiteral(ctx *ArrayLiteralContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

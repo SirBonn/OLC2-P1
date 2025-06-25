@@ -13,8 +13,17 @@ import (
 type DclVisitor struct {
 	parser.BaseVlangVisitor
 	ScopeTrace  *ScopeTrace
+	CallStack   *CallStack
+	Console     *Console
 	ErrorTable  *ErrorTable
 	StructNames []string
+
+	// AGREGAR ESTOS CAMPOS PARA CONTROL DE FLUJO:
+	shouldBreak       bool
+	shouldContinue    bool
+	shouldFallthrough bool
+	breakLabel        string
+	continueLabel     string
 }
 
 func NewDclVisitor(errorTable *ErrorTable) *DclVisitor {

@@ -44,6 +44,15 @@ type Visitor interface {
 	VisitStructInstance(node *StructInstance) interface{}
 	VisitArrayLiteral(node *ArrayLiteral) interface{}
 	VisitExpressionStatement(node *ExpressionStatement) interface{}
+	VisitForCondition(node *ForCondition) interface{}
+	VisitForClassic(node *ForClassic) interface{}
+	VisitForIndexValue(node *ForIndexValue) interface{}
+	VisitForInfinite(node *ForInfinite) interface{}
+	VisitForRange(node *ForRange) interface{}
+	VisitSwitchStmt(node *SwitchStmt) interface{}
+	VisitCaseClause(node *CaseClause) interface{}
+	VisitDefaultClause(node *DefaultClause) interface{}
+	VisitFallthrough(node *Fallthrough) interface{}
 }
 
 // === PROGRAMA ===
@@ -366,3 +375,128 @@ func (e *ExpressionStatement) GetColumn() int { return e.Column }
 func (e *ExpressionStatement) Accept(v Visitor) interface{} {
 	return v.VisitExpressionStatement(e)
 }
+
+// === NUEVOS TIPOS DE FOR ===
+type ForCondition struct {
+	Condition Expression
+	Body      []Statement
+	Line      int
+	Column    int
+}
+
+func (f *ForCondition) Accept(v Visitor) interface{} { return v.VisitForCondition(f) }
+func (f *ForCondition) IsStatement()                 {}
+func (f *ForCondition) GetLine() int                 { return f.Line }
+func (f *ForCondition) GetColumn() int               { return f.Column }
+
+type ForClassic struct {
+	Init      Statement  // Puede ser nil
+	Condition Expression // Puede ser nil
+	Update    Statement  // Puede ser nil
+	Body      []Statement
+	Line      int
+	Column    int
+}
+
+func (f *ForClassic) Accept(v Visitor) interface{} { return v.VisitForClassic(f) }
+func (f *ForClassic) IsStatement()                 {}
+func (f *ForClassic) GetLine() int                 { return f.Line }
+func (f *ForClassic) GetColumn() int               { return f.Column }
+
+type ForIndexValue struct {
+	Index    string
+	Value    string
+	Iterable Expression
+	Body     []Statement
+	Line     int
+	Column   int
+}
+
+func (f *ForIndexValue) Accept(v Visitor) interface{} { return v.VisitForIndexValue(f) }
+func (f *ForIndexValue) IsStatement()                 {}
+func (f *ForIndexValue) GetLine() int                 { return f.Line }
+func (f *ForIndexValue) GetColumn() int               { return f.Column }
+
+type ForInfinite struct {
+	Body   []Statement
+	Line   int
+	Column int
+}
+
+func (f *ForInfinite) Accept(v Visitor) interface{} { return v.VisitForInfinite(f) }
+func (f *ForInfinite) IsStatement()                 {}
+func (f *ForInfinite) GetLine() int                 { return f.Line }
+func (f *ForInfinite) GetColumn() int               { return f.Column }
+
+type ForRange struct {
+	Index    string
+	Value    string
+	Iterable Expression
+	Body     []Statement
+	Line     int
+	Column   int
+}
+
+func (f *ForRange) Accept(v Visitor) interface{} { return v.VisitForRange(f) }
+func (f *ForRange) IsStatement()                 {}
+func (f *ForRange) GetLine() int                 { return f.Line }
+func (f *ForRange) GetColumn() int               { return f.Column }
+
+// === SWITCH ===
+type SwitchStmt struct {
+	Expression Expression // Puede ser nil
+	Cases      []CaseClause
+	Default    *DefaultClause // Puede ser nil
+	Line       int
+	Column     int
+}
+
+func (s *SwitchStmt) Accept(v Visitor) interface{} { return v.VisitSwitchStmt(s) }
+func (s *SwitchStmt) IsStatement()                 {}
+func (s *SwitchStmt) GetLine() int                 { return s.Line }
+func (s *SwitchStmt) GetColumn() int               { return s.Column }
+
+type CaseClause struct {
+	Values     []Expression
+	Statements []Statement
+	Line       int
+	Column     int
+}
+
+func (c *CaseClause) Accept(v Visitor) interface{} { return v.VisitCaseClause(c) }
+func (c *CaseClause) IsStatement()                 {}
+func (c *CaseClause) GetLine() int                 { return c.Line }
+func (c *CaseClause) GetColumn() int               { return c.Column }
+
+type DefaultClause struct {
+	Statements []Statement
+	Line       int
+	Column     int
+}
+
+func (d *DefaultClause) Accept(v Visitor) interface{} { return v.VisitDefaultClause(d) }
+func (d *DefaultClause) IsStatement()                 {}
+func (d *DefaultClause) GetLine() int                 { return d.Line }
+func (d *DefaultClause) GetColumn() int               { return d.Column }
+
+type Fallthrough struct {
+	Line   int
+	Column int
+}
+
+func (f *Fallthrough) Accept(v Visitor) interface{} { return v.VisitFallthrough(f) }
+func (f *Fallthrough) IsStatement()                 {}
+func (f *Fallthrough) GetLine() int                 { return f.Line }
+func (f *Fallthrough) GetColumn() int               { return f.Column }
+
+// type Break struct {
+//     Label  string // Puede ser vacío
+//     Line   int
+//     Column int
+// }
+
+// type Continue struct {
+//     Label  string // Puede ser vacío
+//     Line   int
+//     Column int
+// }

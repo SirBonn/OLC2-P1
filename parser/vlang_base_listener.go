@@ -74,6 +74,72 @@ func (s *BaseVlangListener) EnterForStmt(ctx *ForStmtContext) {}
 // ExitForStmt is called when production ForStmt is exited.
 func (s *BaseVlangListener) ExitForStmt(ctx *ForStmtContext) {}
 
+// EnterForCondition is called when production ForCondition is entered.
+func (s *BaseVlangListener) EnterForCondition(ctx *ForConditionContext) {}
+
+// ExitForCondition is called when production ForCondition is exited.
+func (s *BaseVlangListener) ExitForCondition(ctx *ForConditionContext) {}
+
+// EnterForClassic is called when production ForClassic is entered.
+func (s *BaseVlangListener) EnterForClassic(ctx *ForClassicContext) {}
+
+// ExitForClassic is called when production ForClassic is exited.
+func (s *BaseVlangListener) ExitForClassic(ctx *ForClassicContext) {}
+
+// EnterForIndexValue is called when production ForIndexValue is entered.
+func (s *BaseVlangListener) EnterForIndexValue(ctx *ForIndexValueContext) {}
+
+// ExitForIndexValue is called when production ForIndexValue is exited.
+func (s *BaseVlangListener) ExitForIndexValue(ctx *ForIndexValueContext) {}
+
+// EnterForInfinite is called when production ForInfinite is entered.
+func (s *BaseVlangListener) EnterForInfinite(ctx *ForInfiniteContext) {}
+
+// ExitForInfinite is called when production ForInfinite is exited.
+func (s *BaseVlangListener) ExitForInfinite(ctx *ForInfiniteContext) {}
+
+// EnterForRange is called when production ForRange is entered.
+func (s *BaseVlangListener) EnterForRange(ctx *ForRangeContext) {}
+
+// ExitForRange is called when production ForRange is exited.
+func (s *BaseVlangListener) ExitForRange(ctx *ForRangeContext) {}
+
+// EnterFor_init is called when production for_init is entered.
+func (s *BaseVlangListener) EnterFor_init(ctx *For_initContext) {}
+
+// ExitFor_init is called when production for_init is exited.
+func (s *BaseVlangListener) ExitFor_init(ctx *For_initContext) {}
+
+// EnterFor_update is called when production for_update is entered.
+func (s *BaseVlangListener) EnterFor_update(ctx *For_updateContext) {}
+
+// ExitFor_update is called when production for_update is exited.
+func (s *BaseVlangListener) ExitFor_update(ctx *For_updateContext) {}
+
+// EnterSwitchStmt is called when production SwitchStmt is entered.
+func (s *BaseVlangListener) EnterSwitchStmt(ctx *SwitchStmtContext) {}
+
+// ExitSwitchStmt is called when production SwitchStmt is exited.
+func (s *BaseVlangListener) ExitSwitchStmt(ctx *SwitchStmtContext) {}
+
+// EnterSwitchCase is called when production SwitchCase is entered.
+func (s *BaseVlangListener) EnterSwitchCase(ctx *SwitchCaseContext) {}
+
+// ExitSwitchCase is called when production SwitchCase is exited.
+func (s *BaseVlangListener) ExitSwitchCase(ctx *SwitchCaseContext) {}
+
+// EnterCaseValueList is called when production CaseValueList is entered.
+func (s *BaseVlangListener) EnterCaseValueList(ctx *CaseValueListContext) {}
+
+// ExitCaseValueList is called when production CaseValueList is exited.
+func (s *BaseVlangListener) ExitCaseValueList(ctx *CaseValueListContext) {}
+
+// EnterDefaultCase is called when production DefaultCase is entered.
+func (s *BaseVlangListener) EnterDefaultCase(ctx *DefaultCaseContext) {}
+
+// ExitDefaultCase is called when production DefaultCase is exited.
+func (s *BaseVlangListener) ExitDefaultCase(ctx *DefaultCaseContext) {}
+
 // EnterNumericRange is called when production NumericRange is entered.
 func (s *BaseVlangListener) EnterNumericRange(ctx *NumericRangeContext) {}
 
@@ -122,6 +188,12 @@ func (s *BaseVlangListener) EnterContinueStmt(ctx *ContinueStmtContext) {}
 // ExitContinueStmt is called when production ContinueStmt is exited.
 func (s *BaseVlangListener) ExitContinueStmt(ctx *ContinueStmtContext) {}
 
+// EnterFallthroughStmt is called when production FallthroughStmt is entered.
+func (s *BaseVlangListener) EnterFallthroughStmt(ctx *FallthroughStmtContext) {}
+
+// ExitFallthroughStmt is called when production FallthroughStmt is exited.
+func (s *BaseVlangListener) ExitFallthroughStmt(ctx *FallthroughStmtContext) {}
+
 // EnterDirectAssign is called when production DirectAssign is entered.
 func (s *BaseVlangListener) EnterDirectAssign(ctx *DirectAssignContext) {}
 
@@ -169,6 +241,24 @@ func (s *BaseVlangListener) EnterDeclAssignType(ctx *DeclAssignTypeContext) {}
 
 // ExitDeclAssignType is called when production DeclAssignType is exited.
 func (s *BaseVlangListener) ExitDeclAssignType(ctx *DeclAssignTypeContext) {}
+
+// EnterDeclType is called when production DeclType is entered.
+func (s *BaseVlangListener) EnterDeclType(ctx *DeclTypeContext) {}
+
+// ExitDeclType is called when production DeclType is exited.
+func (s *BaseVlangListener) ExitDeclType(ctx *DeclTypeContext) {}
+
+// EnterArrayAssign is called when production ArrayAssign is entered.
+func (s *BaseVlangListener) EnterArrayAssign(ctx *ArrayAssignContext) {}
+
+// ExitArrayAssign is called when production ArrayAssign is exited.
+func (s *BaseVlangListener) ExitArrayAssign(ctx *ArrayAssignContext) {}
+
+// EnterArrayLiteral is called when production ArrayLiteral is entered.
+func (s *BaseVlangListener) EnterArrayLiteral(ctx *ArrayLiteralContext) {}
+
+// ExitArrayLiteral is called when production ArrayLiteral is exited.
+func (s *BaseVlangListener) ExitArrayLiteral(ctx *ArrayLiteralContext) {}
 
 // EnterIdPattern is called when production IdPattern is entered.
 func (s *BaseVlangListener) EnterIdPattern(ctx *IdPatternContext) {}

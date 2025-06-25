@@ -1,3 +1,4 @@
+// File: ast_builder.go
 package main
 
 import (
@@ -99,7 +100,6 @@ func (b *ASTBuilder) visitStmt(ctx *parser.StmtContext) ast.Statement {
 	case *parser.FuncDeclContext:
 		return b.visitFuncDecl(node)
 	case *parser.FuncCallContext:
-		// IMPORTANTE: Crear un ExpressionStatement para las llamadas a funciones
 		expr := b.visitFuncCall(node)
 		return &ast.ExpressionStatement{
 			Expression: expr,
@@ -114,15 +114,25 @@ func (b *ASTBuilder) visitStmt(ctx *parser.StmtContext) ast.Statement {
 		return b.visitBreakStmt(node)
 	case *parser.ContinueStmtContext:
 		return b.visitContinueStmt(node)
+	case *parser.ForConditionContext:
+		return b.visitForCondition(node)
+	case *parser.ForClassicContext:
+		return b.visitForClassic(node)
+	case *parser.ForIndexValueContext:
+		return b.visitForIndexValue(node)
+	case *parser.ForInfiniteContext:
+		return b.visitForInfinite(node)
+	case *parser.ForRangeContext:
+		return b.visitForRange(node)
+	case *parser.SwitchStmtContext:
+		return b.visitSwitchStmt(node)
+	case *parser.FallthroughStmtContext:
+		return b.visitFallthroughStmt(node)
 	default:
 		b.addError(fmt.Sprintf("unhandled statement type: %T", node))
 		return nil
 	}
 }
-
-// AGREGAMOS LOS MÉTODOS FALTANTES:
-
-// VisitIf_chain procesa una cadena if
 func (b *ASTBuilder) VisitIf_chain(ctx *parser.IfChainContext) interface{} {
 	condition := b.visitExpresion(ctx.Expresion())
 	statements := make([]ast.Statement, 0)
@@ -139,7 +149,6 @@ func (b *ASTBuilder) VisitIf_chain(ctx *parser.IfChainContext) interface{} {
 	}
 }
 
-// VisitElse_stmt procesa un else
 func (b *ASTBuilder) VisitElse_stmt(ctx *parser.ElseStmtContext) interface{} {
 	statements := make([]ast.Statement, 0)
 
@@ -160,13 +169,11 @@ func (b *ASTBuilder) visitIfStmt(ctx *parser.IfStmtContext) ast.Statement {
 		return nil
 	}
 
-	// Procesar el if principal (primera cadena)
 	ifStmt := b.buildIfChain(ctx.If_chain(0).(*parser.IfChainContext))
 	if ifStmt == nil {
 		return nil
 	}
 
-	// Procesar else ifs (cadenas adicionales)
 	currentIf := ifStmt
 	for _, chainCtx := range ctx.AllIf_chain()[1:] {
 		elseIfStmt := b.buildIfChain(chainCtx.(*parser.IfChainContext))
@@ -177,7 +184,6 @@ func (b *ASTBuilder) visitIfStmt(ctx *parser.IfStmtContext) ast.Statement {
 		currentIf = elseIfStmt
 	}
 
-	// Procesar else (si existe)
 	if ctx.Else_stmt() != nil {
 		elseStmt := ctx.Else_stmt().(*parser.ElseStmtContext)
 		currentIf.ElseBranch = b.processStatements(elseStmt.AllStmt())
@@ -186,7 +192,6 @@ func (b *ASTBuilder) visitIfStmt(ctx *parser.IfStmtContext) ast.Statement {
 	return ifStmt
 }
 
-// Función auxiliar para construir un nodo IfStmt a partir de una if_chain
 func (b *ASTBuilder) buildIfChain(chainCtx *parser.IfChainContext) *ast.IfStmt {
 	condition := b.visitExpresion(chainCtx.Expresion())
 	if condition == nil {
@@ -204,7 +209,6 @@ func (b *ASTBuilder) buildIfChain(chainCtx *parser.IfChainContext) *ast.IfStmt {
 	}
 }
 
-// Procesa una lista de stmtContext y devuelve Statements
 func (b *ASTBuilder) processStatements(stmtCtxs []parser.IStmtContext) []ast.Statement {
 	statements := make([]ast.Statement, 0)
 	for _, stmtCtx := range stmtCtxs {
@@ -252,9 +256,9 @@ func (b *ASTBuilder) visitDeclAssign(ctx *parser.DeclAssignContext) ast.Statemen
 
 	return &ast.VarDecl{
 		Name:      name,
-		Type:      "", // Tipo inferido
+		Type:      "",
 		Value:     value,
-		IsMutable: true, // mut keyword
+		IsMutable: true,
 		Line:      ctx.GetStart().GetLine(),
 		Column:    ctx.GetStart().GetColumn(),
 	}
@@ -268,9 +272,9 @@ func (b *ASTBuilder) visitDeclAssignTypeContext(ctx *parser.DeclAssignTypeContex
 
 	return &ast.VarDecl{
 		Name:      name,
-		Type:      varType, // Tipo explícito (ej: "int", "[]float", etc.)
+		Type:      varType,
 		Value:     value,
-		IsMutable: ctx.MUT() != nil, // true si tiene la keyword "mut"
+		IsMutable: ctx.MUT() != nil,
 		Line:      ctx.GetStart().GetLine(),
 		Column:    ctx.GetStart().GetColumn(),
 	}
@@ -289,7 +293,6 @@ func (b *ASTBuilder) visitDirectAssign(ctx *parser.DirectAssignContext) ast.Stat
 }
 
 // === CONTROL FLOW ===
-// Removemos el método VisitIfStmt duplicado y usamos solo visitIfStmt
 
 func (b *ASTBuilder) visitWhileStmt(ctx *parser.WhileStmtContext) ast.Statement {
 	condition := b.visitExpresion(ctx.Expresion())
@@ -417,10 +420,6 @@ func (b *ASTBuilder) visitStructDecl(ctx *parser.StructDeclContext) ast.Statemen
 	name := ctx.ID().GetText()
 	fields := make([]ast.Field, 0)
 
-	// TODO: La gramática muestra assign_stmt dentro del struct,
-	// pero según el PDF deberían ser declaraciones de campos
-	// Por ahora, lo dejamos vacío
-
 	return &ast.StructDecl{
 		Name:   name,
 		Fields: fields,
@@ -513,7 +512,6 @@ func (b *ASTBuilder) visitIdExpr(ctx *parser.IdContext) ast.Expression {
 }
 
 func (b *ASTBuilder) visitFuncCall(ctx *parser.FuncCallContext) ast.Expression {
-	// Manejar id_pattern correctamente
 	idPattern := ctx.Id_pattern().(*parser.IdPatternContext)
 	ids := idPattern.AllID()
 
@@ -610,7 +608,7 @@ func (b *ASTBuilder) visitValorDecimal(ctx *parser.ValorDecimalContext) ast.Expr
 
 func (b *ASTBuilder) visitValorCadena(ctx *parser.ValorCadenaContext) ast.Expression {
 	text := ctx.GetText()
-	text = text[1 : len(text)-1] // Remover comillas
+	text = text[1 : len(text)-1]
 
 	text = strings.ReplaceAll(text, "\\\"", "\"")
 	text = strings.ReplaceAll(text, "\\\\", "\\")
@@ -639,7 +637,6 @@ func (b *ASTBuilder) visitValorBooleano(ctx *parser.ValorBooleanoContext) ast.Ex
 
 func (b *ASTBuilder) visitValorCaracter(ctx *parser.ValorCaracterContext) ast.Expression {
 	text := ctx.GetText()
-	// Remover comillas simples
 	if len(text) >= 3 {
 		char := text[1 : len(text)-1]
 		return &ast.Literal{
@@ -722,7 +719,6 @@ func (b *ASTBuilder) visitModAssign(ctx *parser.ModAssignContext) ast.Statement 
 func (b *ASTBuilder) visitArrayExpr(ctx *parser.ArrayexpreContext) ast.Expression {
 	elements := make([]ast.Expression, 0)
 
-	// Iterar sobre todos los elementos del array
 	for _, exprCtx := range ctx.AllExpresion() {
 		element := b.visitExpresion(exprCtx)
 		if element != nil {
@@ -799,3 +795,153 @@ type RangeExpr struct {
 func (r *RangeExpr) IsExpression()  {}
 func (r *RangeExpr) GetLine() int   { return r.Line }
 func (r *RangeExpr) GetColumn() int { return r.Column }
+func (b *ASTBuilder) visitForCondition(ctx *parser.ForConditionContext) ast.Statement {
+	condition := b.visitExpresion(ctx.Expresion())
+	body := b.processStatements(ctx.AllStmt())
+
+	return &ast.ForCondition{
+		Condition: condition,
+		Body:      body,
+		Line:      ctx.GetStart().GetLine(),
+		Column:    ctx.GetStart().GetColumn(),
+	}
+}
+
+func (b *ASTBuilder) visitForClassic(ctx *parser.ForClassicContext) ast.Statement {
+	var init ast.Statement
+	var condition ast.Expression
+	var update ast.Statement
+
+	if ctx.For_init() != nil {
+		init = b.visitForInit(ctx.For_init())
+	}
+
+	if ctx.Expresion() != nil {
+		condition = b.visitExpresion(ctx.Expresion())
+	}
+
+	if ctx.For_update() != nil {
+		update = b.visitForUpdate(ctx.For_update())
+	}
+
+	body := b.processStatements(ctx.AllStmt())
+
+	return &ast.ForClassic{
+		Init:      init,
+		Condition: condition,
+		Update:    update,
+		Body:      body,
+		Line:      ctx.GetStart().GetLine(),
+		Column:    ctx.GetStart().GetColumn(),
+	}
+}
+
+func (b *ASTBuilder) visitForIndexValue(ctx *parser.ForIndexValueContext) ast.Statement {
+	index := ctx.ID(0).GetText()
+	value := ctx.ID(1).GetText()
+	iterable := b.visitExpresion(ctx.Expresion())
+	body := b.processStatements(ctx.AllStmt())
+
+	return &ast.ForIndexValue{
+		Index:    index,
+		Value:    value,
+		Iterable: iterable,
+		Body:     body,
+		Line:     ctx.GetStart().GetLine(),
+		Column:   ctx.GetStart().GetColumn(),
+	}
+}
+
+func (b *ASTBuilder) visitForInfinite(ctx *parser.ForInfiniteContext) ast.Statement {
+	body := b.processStatements(ctx.AllStmt())
+
+	return &ast.ForInfinite{
+		Body:   body,
+		Line:   ctx.GetStart().GetLine(),
+		Column: ctx.GetStart().GetColumn(),
+	}
+}
+
+func (b *ASTBuilder) visitForRange(ctx *parser.ForRangeContext) ast.Statement {
+	index := ctx.ID(0).GetText()
+	value := ctx.ID(1).GetText()
+	iterable := b.visitExpresion(ctx.Expresion())
+	body := b.processStatements(ctx.AllStmt())
+
+	return &ast.ForRange{
+		Index:    index,
+		Value:    value,
+		Iterable: iterable,
+		Body:     body,
+		Line:     ctx.GetStart().GetLine(),
+		Column:   ctx.GetStart().GetColumn(),
+	}
+}
+
+func (b *ASTBuilder) visitSwitchStmt(ctx *parser.SwitchStmtContext) ast.Statement {
+	var expr ast.Expression
+	if ctx.Expresion() != nil {
+		expr = b.visitExpresion(ctx.Expresion())
+	}
+
+	cases := make([]ast.CaseClause, 0)
+	for _, caseCtx := range ctx.AllSwitch_case() {
+		cases = append(cases, b.visitSwitchCase(caseCtx.(*parser.SwitchCaseContext)))
+	}
+
+	var defaultCase *ast.DefaultClause
+	if ctx.Default_case() != nil {
+		defaultCase = b.visitDefaultCase(ctx.Default_case().(*parser.DefaultCaseContext))
+	}
+
+	return &ast.SwitchStmt{
+		Expression: expr,
+		Cases:      cases,
+		Default:    defaultCase,
+		Line:       ctx.GetStart().GetLine(),
+		Column:     ctx.GetStart().GetColumn(),
+	}
+}
+
+func (b *ASTBuilder) visitSwitchCase(ctx *parser.SwitchCaseContext) ast.CaseClause {
+	values := b.visitCaseValues(ctx.Case_values().(*parser.CaseValueListContext))
+	statements := b.processStatements(ctx.AllStmt())
+
+	return ast.CaseClause{
+		Values:     values,
+		Statements: statements,
+		Line:       ctx.GetStart().GetLine(),
+		Column:     ctx.GetStart().GetColumn(),
+	}
+}
+
+func (b *ASTBuilder) visitCaseValues(ctx *parser.CaseValueListContext) []ast.Expression {
+	values := make([]ast.Expression, 0)
+	for _, exprCtx := range ctx.AllExpresion() {
+		values = append(values, b.visitExpresion(exprCtx))
+	}
+	return values
+}
+
+func (b *ASTBuilder) visitDefaultCase(ctx *parser.DefaultCaseContext) *ast.DefaultClause {
+	return &ast.DefaultClause{
+		Statements: b.processStatements(ctx.AllStmt()),
+		Line:       ctx.GetStart().GetLine(),
+		Column:     ctx.GetStart().GetColumn(),
+	}
+}
+
+func (b *ASTBuilder) visitFallthroughStmt(ctx *parser.FallthroughStmtContext) ast.Statement {
+	return &ast.Fallthrough{
+		Line:   ctx.GetStart().GetLine(),
+		Column: ctx.GetStart().GetColumn(),
+	}
+}
+
+func (b *ASTBuilder) visitForInit(ctx parser.IFor_initContext) ast.Statement {
+	return nil
+}
+
+func (b *ASTBuilder) visitForUpdate(ctx parser.IFor_updateContext) ast.Statement {
+	return nil
+}
