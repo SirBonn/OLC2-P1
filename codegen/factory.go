@@ -2,11 +2,12 @@ package codegen
 
 import (
 	"compiler/codegen/arm64"
+	"compiler/internal/base"
 	"fmt"
 )
 
 // GeneratorFactory crea generadores para diferentes plataformas
-type GeneratorFactory struct{}
+type GeneratorFactory struct{ base *base.BaseGenerator }
 
 // NewGeneratorFactory crea una nueva fábrica de generadores
 func NewGeneratorFactory() *GeneratorFactory {
