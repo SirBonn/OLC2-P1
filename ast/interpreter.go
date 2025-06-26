@@ -242,6 +242,27 @@ func (i *Interpreter) executeStatement(stmt Statement) error {
 	case *Return:
 		fmt.Printf("Ejecutando Return con valor: %T\n", s.Value)
 		return i.executeReturn(s)
+	case *ForCondition:
+		fmt.Printf("Ejecutando ForCondition\n")
+		return i.executeForCondition(s)
+	case *ForClassic:
+		fmt.Printf("Ejecutando ForClassic\n")
+		return i.executeForClassic(s)
+	case *ForIndexValue:
+		fmt.Printf("Ejecutando ForIndexValue\n")
+		return i.executeForIndexValue(s)
+	case *ForInfinite:
+		fmt.Printf("Ejecutando ForInfinite\n")
+		return i.executeForInfinite(s)
+	case *ForRange:
+		fmt.Printf("Ejecutando ForRange\n")
+		return i.executeForRange(s)
+	case *SwitchStmt:
+		fmt.Printf("Ejecutando SwitchStmt\n")
+		return i.executeSwitchStmt(s)
+	case *Fallthrough:
+		fmt.Printf("Ejecutando Fallthrough\n")
+		return i.executeFallthrough(s)
 	case *Break:
 		fmt.Println("Ejecutando Break")
 		i.shouldBreak = true
@@ -740,7 +761,6 @@ func (i *Interpreter) negateValue(value Value) (Value, error) {
 
 func (i *Interpreter) compareValues(left, right Value) int {
 	if reflect.TypeOf(left.Value) != reflect.TypeOf(right.Value) {
-		// Conversión automática para comparación
 		if l, ok := left.Value.(int); ok {
 			if r, ok := right.Value.(float64); ok {
 				return i.compareFloat64(float64(l), r)
@@ -751,7 +771,7 @@ func (i *Interpreter) compareValues(left, right Value) int {
 				return i.compareFloat64(l, float64(r))
 			}
 		}
-		return 1 // Tipos diferentes, left > right arbitrariamente
+		return 1
 	}
 
 	switch l := left.Value.(type) {
@@ -954,7 +974,6 @@ func (i *Interpreter) executeModAssign(stmt *ModAssign) error {
 	return fmt.Errorf("unsupported modulo assign target: %T", stmt.Target)
 }
 
-// Y la función evaluateArrayLiteral:
 func (i *Interpreter) evaluateArrayLiteral(expr *ArrayLiteral) (Value, error) {
 	elements := make([]interface{}, len(expr.Elements))
 
@@ -975,7 +994,7 @@ func (env *Environment) registerBuiltins() {
 	env.builtins["float"] = builtinFloat
 	env.builtins["string"] = builtinString
 
-	// Funciones adicionales
+	// Funciones
 	env.builtins["atoi"] = builtinAtoi
 	env.builtins["parse_float"] = builtinParseFloat
 	env.builtins["TypeOf"] = builtinTypeOf
@@ -999,7 +1018,7 @@ func builtinInt(args []Value) (Value, error) {
 	case float64:
 		return Value{Value: int(v), Type: "int"}, nil
 	case int:
-		return arg, nil // Ya es int
+		return arg, nil
 	default:
 		return Value{}, fmt.Errorf("int() cannot convert %T to int", v)
 	}
@@ -1022,7 +1041,7 @@ func builtinFloat(args []Value) (Value, error) {
 	case int:
 		return Value{Value: float64(v), Type: "float64"}, nil
 	case float64:
-		return arg, nil // Ya es float
+		return arg, nil
 	default:
 		return Value{}, fmt.Errorf("float() cannot convert %T to float", v)
 	}
@@ -1037,7 +1056,7 @@ func builtinString(args []Value) (Value, error) {
 	arg := args[0]
 	switch v := arg.Value.(type) {
 	case string:
-		return arg, nil // Ya es string
+		return arg, nil
 	case int:
 		return Value{Value: strconv.Itoa(v), Type: "string"}, nil
 	case float64:
@@ -1088,7 +1107,6 @@ func builtinParseFloat(args []Value) (Value, error) {
 	return Value{}, fmt.Errorf("parse_float() expects string argument, got %T", arg.Value)
 }
 
-// Función TypeOf() - retorna el tipo de un valor
 func builtinTypeOf(args []Value) (Value, error) {
 	if len(args) != 1 {
 		return Value{}, fmt.Errorf("TypeOf() expects exactly 1 argument, got %d", len(args))
@@ -1097,12 +1115,9 @@ func builtinTypeOf(args []Value) (Value, error) {
 	arg := args[0]
 	typeStr := arg.Type
 
-	// Manejar casos especiales
 	switch arg.Value.(type) {
 	case []interface{}:
-		// Para arrays, incluir el tipo de elemento si es posible
 		if arr, ok := arg.Value.([]interface{}); ok && len(arr) > 0 {
-			// Inferir tipo del primer elemento
 			firstElem := Value{Value: arr[0]}
 			elemType := getTypeString(firstElem)
 			typeStr = "[]" + elemType
@@ -1147,9 +1162,6 @@ func getTypeString(v Value) string {
 	}
 }
 
-// 6. Actualizar GetFunction para buscar también en builtins
-
-// 7. Agregar método para obtener builtin
 func (env *Environment) GetBuiltin(name string) (BuiltinFunc, bool) {
 	if fn, exists := env.builtins[name]; exists {
 		return fn, true
@@ -1158,4 +1170,349 @@ func (env *Environment) GetBuiltin(name string) (BuiltinFunc, bool) {
 		return env.parent.GetBuiltin(name)
 	}
 	return nil, false
+}
+
+func (i *Interpreter) executeSwitchStmt(stmt *SwitchStmt) error {
+	var switchValue Value
+	var err error
+
+	// Evaluar expresión del switch (si existe)
+	if stmt.Expression != nil {
+		switchValue, err = i.evaluateExpression(stmt.Expression)
+		if err != nil {
+			return err
+		}
+	}
+
+	executedCase := false
+	shouldFallthrough := false
+
+	// Evaluar cada case
+	for _, caseClause := range stmt.Cases {
+		matched := false
+
+		if !shouldFallthrough {
+			// Evaluar si algún valor del case coincide
+			for _, caseExpr := range caseClause.Values {
+				caseValue, err := i.evaluateExpression(caseExpr)
+				if err != nil {
+					return err
+				}
+
+				if stmt.Expression != nil {
+					// Comparar valores
+					if i.compareValues(switchValue, caseValue) == 0 {
+						matched = true
+						break
+					}
+				} else {
+					// Switch sin expresión - evaluar cada case como booleano
+					if i.isTruthy(caseValue) {
+						matched = true
+						break
+					}
+				}
+			}
+		}
+
+		if matched || shouldFallthrough {
+			executedCase = true
+			shouldFallthrough = false
+
+			// Ejecutar statements del case
+			for _, s := range caseClause.Statements {
+				// Verificar si es fallthrough
+				if _, ok := s.(*Fallthrough); ok {
+					shouldFallthrough = true
+					break
+				}
+
+				err := i.executeStatement(s)
+				if err != nil {
+					return err
+				}
+
+				if i.shouldBreak {
+					i.shouldBreak = false
+					return nil
+				}
+
+				if i.shouldExit {
+					return nil
+				}
+			}
+
+			if !shouldFallthrough {
+				break
+			}
+		}
+	}
+
+	// Ejecutar default si no se ejecutó ningún case
+	if !executedCase && stmt.Default != nil {
+		for _, s := range stmt.Default.Statements {
+			err := i.executeStatement(s)
+			if err != nil {
+				return err
+			}
+
+			if i.shouldBreak {
+				i.shouldBreak = false
+				return nil
+			}
+
+			if i.shouldExit {
+				return nil
+			}
+		}
+	}
+
+	return nil
+}
+
+// executeFallthrough ejecuta un fallthrough (usado dentro de switch)
+func (i *Interpreter) executeFallthrough(stmt *Fallthrough) error {
+	// El manejo real del fallthrough se hace en executeSwitchStmt
+	// Este método existe por consistencia con el patrón visitor
+	return nil
+}
+
+// executeForCondition ejecuta un for con solo condición
+func (i *Interpreter) executeForCondition(stmt *ForCondition) error {
+	for {
+		condition, err := i.evaluateExpression(stmt.Condition)
+		if err != nil {
+			return err
+		}
+
+		if !i.isTruthy(condition) {
+			break
+		}
+
+		i.shouldBreak = false
+		i.shouldContinue = false
+
+		for _, s := range stmt.Body {
+			err := i.executeStatement(s)
+			if err != nil {
+				return err
+			}
+
+			if i.shouldBreak {
+				i.shouldBreak = false
+				return nil
+			}
+
+			if i.shouldContinue {
+				i.shouldContinue = false
+				break
+			}
+
+			if i.shouldExit {
+				return nil
+			}
+		}
+	}
+
+	return nil
+}
+
+// executeForClassic ejecuta un for clásico (init; condition; update)
+func (i *Interpreter) executeForClassic(stmt *ForClassic) error {
+	// Crear nuevo entorno para el scope del for
+	forEnv := NewEnvironment(i.env)
+	oldEnv := i.env
+	i.env = forEnv
+	defer func() { i.env = oldEnv }()
+
+	// Ejecutar inicialización
+	if stmt.Init != nil {
+		err := i.executeStatement(stmt.Init)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Loop principal
+	for {
+		// Evaluar condición (si existe)
+		if stmt.Condition != nil {
+			condition, err := i.evaluateExpression(stmt.Condition)
+			if err != nil {
+				return err
+			}
+
+			if !i.isTruthy(condition) {
+				break
+			}
+		}
+
+		i.shouldBreak = false
+		i.shouldContinue = false
+
+		// Ejecutar cuerpo
+		for _, s := range stmt.Body {
+			err := i.executeStatement(s)
+			if err != nil {
+				return err
+			}
+
+			if i.shouldBreak {
+				i.shouldBreak = false
+				return nil
+			}
+
+			if i.shouldContinue {
+				i.shouldContinue = false
+				break
+			}
+
+			if i.shouldExit {
+				return nil
+			}
+		}
+
+		// Ejecutar actualización
+		if stmt.Update != nil {
+			err := i.executeStatement(stmt.Update)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// executeForIndexValue ejecuta un for con índice y valor
+func (i *Interpreter) executeForIndexValue(stmt *ForIndexValue) error {
+	// Evaluar el iterable
+	iterable, err := i.evaluateExpression(stmt.Iterable)
+	if err != nil {
+		return err
+	}
+
+	// Crear nuevo entorno para el scope del for
+	forEnv := NewEnvironment(i.env)
+	oldEnv := i.env
+	i.env = forEnv
+	defer func() { i.env = oldEnv }()
+
+	// Verificar que es un array
+	if arr, ok := iterable.Value.([]interface{}); ok {
+		for idx, item := range arr {
+			// Establecer índice y valor
+			i.env.Set(stmt.Index, Value{Value: idx, Type: "int"})
+			i.env.Set(stmt.Value, Value{Value: item, Type: "auto"})
+
+			i.shouldBreak = false
+			i.shouldContinue = false
+
+			for _, s := range stmt.Body {
+				err := i.executeStatement(s)
+				if err != nil {
+					return err
+				}
+
+				if i.shouldBreak {
+					i.shouldBreak = false
+					return nil
+				}
+
+				if i.shouldContinue {
+					i.shouldContinue = false
+					break
+				}
+
+				if i.shouldExit {
+					return nil
+				}
+			}
+		}
+	} else {
+		return fmt.Errorf("cannot iterate with index,value over type: %T", iterable.Value)
+	}
+
+	return nil
+}
+
+// executeForInfinite ejecuta un for infinito
+func (i *Interpreter) executeForInfinite(stmt *ForInfinite) error {
+	for {
+		i.shouldBreak = false
+		i.shouldContinue = false
+
+		for _, s := range stmt.Body {
+			err := i.executeStatement(s)
+			if err != nil {
+				return err
+			}
+
+			if i.shouldBreak {
+				i.shouldBreak = false
+				return nil
+			}
+
+			if i.shouldContinue {
+				i.shouldContinue = false
+				break
+			}
+
+			if i.shouldExit {
+				return nil
+			}
+		}
+	}
+}
+
+// executeForRange ejecuta un for range (similar a ForIndexValue)
+func (i *Interpreter) executeForRange(stmt *ForRange) error {
+	// Evaluar el iterable
+	iterable, err := i.evaluateExpression(stmt.Iterable)
+	if err != nil {
+		return err
+	}
+
+	// Crear nuevo entorno para el scope del for
+	forEnv := NewEnvironment(i.env)
+	oldEnv := i.env
+	i.env = forEnv
+	defer func() { i.env = oldEnv }()
+
+	// Verificar que es un array
+	if arr, ok := iterable.Value.([]interface{}); ok {
+		for idx, item := range arr {
+			// Establecer índice y valor
+			i.env.Set(stmt.Index, Value{Value: idx, Type: "int"})
+			i.env.Set(stmt.Value, Value{Value: item, Type: "auto"})
+
+			i.shouldBreak = false
+			i.shouldContinue = false
+
+			for _, s := range stmt.Body {
+				err := i.executeStatement(s)
+				if err != nil {
+					return err
+				}
+
+				if i.shouldBreak {
+					i.shouldBreak = false
+					return nil
+				}
+
+				if i.shouldContinue {
+					i.shouldContinue = false
+					break
+				}
+
+				if i.shouldExit {
+					return nil
+				}
+			}
+		}
+	} else {
+		return fmt.Errorf("cannot range over type: %T", iterable.Value)
+	}
+
+	return nil
 }

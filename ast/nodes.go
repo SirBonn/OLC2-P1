@@ -1,3 +1,5 @@
+// Package ast defines the abstract syntax tree (AST) nodes and visitor interface
+// file: ast/nodes.go
 package ast
 
 // Interfaces base

@@ -3,7 +3,6 @@ module compiler
 go 1.23.9
 
 require (
-	fyne.io/fyne v1.4.3
 	fyne.io/fyne/v2 v2.6.1
 	github.com/antlr4-go/antlr/v4 v4.13.1
 )
@@ -28,8 +27,6 @@ require (
 	github.com/jeandeaual/go-locale v0.0.0-20241217141322-fcc2cadd6f08 // indirect
 	github.com/jsummers/gobmp v0.0.0-20230614200233-a9de23ed2e25 // indirect
 	github.com/kr/text v0.2.0 // indirect
-	github.com/mndrix/golog v0.0.0-20170330170653-a28e2a269775 // indirect
-	github.com/mndrix/ps v0.0.0-20170330174427-18e65badd6ab // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/nicksnyder/go-i18n/v2 v2.5.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
