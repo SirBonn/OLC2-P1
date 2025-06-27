@@ -1,13 +1,16 @@
+// main v1
 package main
 
 import (
 	"compiler/ast"
+	"compiler/codegen/arm64"
 	"compiler/cst"
 	"compiler/errors"
 	parser "compiler/parser"
 	"compiler/reports"
 	"fmt"
 	"io/ioutil"
+	"path/filepath"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -104,14 +107,18 @@ func (e *LineNumberedEditor) OnChanged(callback func(string)) {
 }
 
 type IDE struct {
-	window           fyne.Window
-	codeEditor       *LineNumberedEditor
-	outputEntry      *widget.Entry
+	window     fyne.Window
+	codeEditor *LineNumberedEditor
+	// consoleOutput    *widget.Entry
 	currentFile      string
 	app              fyne.App
 	errorTable       *errors.ErrorTable
 	symbolTable      *ast.SymbolTable
 	semanticAnalyzer *ast.SemanticAnalyzer
+
+	outputTabs     *container.AppTabs
+	consoleOutput  *widget.Entry
+	assemblyOutput *widget.Entry
 }
 
 func main() {
@@ -128,7 +135,7 @@ func main() {
 	w.SetMainMenu(mainMenu)
 
 	w.SetContent(content)
-	w.Resize(fyne.NewSize(1000, 700))
+	w.Resize(fyne.NewSize(1000, 800))
 	w.CenterOnScreen()
 	w.ShowAndRun()
 }
@@ -136,18 +143,39 @@ func main() {
 func (ide *IDE) createMainContent() fyne.CanvasObject {
 	ide.codeEditor = NewLineNumberedEditor()
 
-	ide.outputEntry = widget.NewMultiLineEntry()
-	ide.outputEntry.Wrapping = fyne.TextWrapWord
-	ide.outputEntry.Disable()
+	// Crear las salidas separadas
+	ide.consoleOutput = widget.NewMultiLineEntry()
+	ide.consoleOutput.Wrapping = fyne.TextWrapWord
+	ide.consoleOutput.Disable()
 
-	tabs := container.NewAppTabs(
-		container.NewTabItem("Editor", container.NewVScroll(ide.codeEditor)),
-		container.NewTabItem("Consola", container.NewVScroll(ide.outputEntry)),
+	ide.assemblyOutput = widget.NewMultiLineEntry()
+	ide.assemblyOutput.Wrapping = fyne.TextWrapOff
+	ide.assemblyOutput.Disable()
+
+	// Mantener referencia para compatibilidad
+	ide.consoleOutput = ide.consoleOutput
+
+	// Tabs de salida
+	ide.outputTabs = container.NewAppTabs(
+		container.NewTabItem("Consola", container.NewVScroll(ide.consoleOutput)),
+		container.NewTabItem("ARM64 Assembly", container.NewVScroll(ide.assemblyOutput)),
 	)
+
+	// Tabs principales
+	mainTabs := container.NewAppTabs(
+		container.NewTabItem("Editor", container.NewVScroll(ide.codeEditor)),
+	)
+
+	// Split entre editor y salidas
+	split := container.NewVSplit(
+		mainTabs,
+		ide.outputTabs,
+	)
+	split.SetOffset(0.6) // 60% para el editor, 40% para las salidas
 
 	toolbar := ide.createToolbar()
 
-	return container.NewBorder(toolbar, nil, nil, nil, tabs)
+	return container.NewBorder(toolbar, nil, nil, nil, split)
 }
 
 func (ide *IDE) createMenu() *fyne.MainMenu {
@@ -161,6 +189,8 @@ func (ide *IDE) createMenu() *fyne.MainMenu {
 
 	toolsMenu := fyne.NewMenu("Herramientas",
 		fyne.NewMenuItem("Ejecutar", func() { ide.runCode() }),
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Compilar a ARM64", func() { ide.compileToARM64() }),
 	)
 
 	reportsMenu := fyne.NewMenu("Reportes",
@@ -178,13 +208,17 @@ func (ide *IDE) createToolbar() fyne.CanvasObject {
 	})
 	runBtn.Importance = widget.HighImportance
 
-	return container.NewHBox(runBtn)
+	compileBtn := widget.NewButtonWithIcon("Compilar ARM64", theme.DocumentSaveIcon(), func() {
+		ide.compileToARM64()
+	})
+
+	return container.NewHBox(runBtn, compileBtn)
 }
 
 func (ide *IDE) newFile() {
 	ide.codeEditor.SetText("")
 	ide.currentFile = ""
-	ide.outputEntry.SetText("")
+	ide.consoleOutput.SetText("")
 }
 
 func (ide *IDE) openFile() {
@@ -236,7 +270,7 @@ func (ide *IDE) saveFileAs() {
 
 func (ide *IDE) runCode() {
 	code := ide.codeEditor.Text()
-	ide.outputEntry.SetText("Compilando...\n\n")
+	ide.consoleOutput.SetText("Interpretando...\n\n")
 
 	lexicalErrs := errors.NewLexicalErrorListener()
 	lexer := parser.NewVlangLexer(antlr.NewInputStream(code))
@@ -258,14 +292,14 @@ func (ide *IDE) runCode() {
 		return
 	}
 
-	ide.outputEntry.SetText("Análisis léxico y sintáctico completado\n")
-	ide.outputEntry.SetText(ide.outputEntry.Text + "Construyendo AST...\n")
+	ide.consoleOutput.SetText("Análisis léxico y sintáctico completado\n")
+	ide.consoleOutput.SetText(ide.consoleOutput.Text + "Construyendo AST...\n")
 
 	astBuilder := NewASTBuilder()
 	astProgram, err := astBuilder.Build(tree)
 
 	if err != nil {
-		ide.outputEntry.SetText(ide.outputEntry.Text + fmt.Sprintf("Error al construir el AST: %v\n", err))
+		ide.consoleOutput.SetText(ide.consoleOutput.Text + fmt.Sprintf("Error al construir el AST: %v\n", err))
 		return
 	}
 
@@ -275,30 +309,67 @@ func (ide *IDE) runCode() {
 		for _, e := range ide.semanticAnalyzer.GetSymbolTable().GetErrors() {
 			fmt.Println("Error semántico:", e)
 		}
-		ide.outputEntry.SetText(ide.outputEntry.Text + fmt.Sprintf("Error: %v\n", err))
+		ide.consoleOutput.SetText(ide.consoleOutput.Text + fmt.Sprintf("Error: %v\n", err))
 	}
 
 	ide.symbolTable = ide.semanticAnalyzer.GetSymbolTable()
 
-	ide.outputEntry.SetText(ide.outputEntry.Text + "AST construido exitosamente\n")
-	ide.outputEntry.SetText(ide.outputEntry.Text + "\nEjecutando programa...\n")
-	ide.outputEntry.SetText(ide.outputEntry.Text + "────────────────────────────\n\n")
+	ide.consoleOutput.SetText(ide.consoleOutput.Text + "AST construido exitosamente\n")
+	ide.consoleOutput.SetText(ide.consoleOutput.Text + "\nEjecutando programa...\n")
+	ide.consoleOutput.SetText(ide.consoleOutput.Text + "────────────────────────────\n\n")
 
 	interpreter := ast.NewInterpreter()
 	output, err := interpreter.Interpret(astProgram)
 
 	if err != nil {
 		errorMsg := fmt.Sprintf("Error durante la ejecución: %v\n", err)
-		ide.outputEntry.SetText(ide.outputEntry.Text + errorMsg)
+		ide.consoleOutput.SetText(ide.consoleOutput.Text + errorMsg)
 		fmt.Print(errorMsg)
-		ide.outputEntry.SetText(ide.outputEntry.Text + "\n────────────────────────────\n")
+		ide.consoleOutput.SetText(ide.consoleOutput.Text + "\n────────────────────────────\n")
 		return
 	}
 
-	ide.outputEntry.SetText(ide.outputEntry.Text + output)
+	ide.consoleOutput.SetText(ide.consoleOutput.Text + output)
 	fmt.Print(output)
-	ide.outputEntry.SetText(ide.outputEntry.Text + "\n────────────────────────────\n")
-	ide.outputEntry.SetText(ide.outputEntry.Text + "Ejecución completada\n")
+	ide.consoleOutput.SetText(ide.consoleOutput.Text + "\n────────────────────────────\n")
+	ide.consoleOutput.SetText(ide.consoleOutput.Text + "Ejecución completada\n")
+}
+
+func (ide *IDE) buildAST() (*ast.Program, error) {
+	code := ide.codeEditor.Text()
+	ide.consoleOutput.SetText("Interpretando...\n\n")
+
+	lexicalErrs := errors.NewLexicalErrorListener()
+	lexer := parser.NewVlangLexer(antlr.NewInputStream(code))
+	lexer.RemoveErrorListeners()
+	lexer.AddErrorListener(lexicalErrs)
+	tokens := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
+
+	p := parser.NewVlangParser(tokens)
+	p.BuildParseTrees = true
+	syntaxErrs := errors.NewSyntaxErrorListener(lexicalErrs.ErrorTable)
+	p.RemoveErrorListeners()
+	p.AddErrorListener(syntaxErrs)
+	tree := p.Programa()
+
+	ide.errorTable = lexicalErrs.ErrorTable
+
+	if ide.errorTable.HasErrors() {
+		ide.showErrors()
+		return nil, fmt.Errorf("errores de análisis")
+	}
+
+	ide.consoleOutput.SetText("Análisis léxico y sintáctico completado\n")
+	ide.consoleOutput.SetText(ide.consoleOutput.Text + "Construyendo AST...\n")
+
+	astBuilder := NewASTBuilder()
+	astProgram, err := astBuilder.Build(tree)
+
+	if err != nil {
+		return nil, err
+	}
+	ide.symbolTable = ide.semanticAnalyzer.GetSymbolTable()
+	return astProgram, nil
 }
 
 func (ide *IDE) showErrors() {
@@ -309,7 +380,7 @@ func (ide *IDE) showErrors() {
 		output.WriteString(fmt.Sprintf("[%d] %s\n", i+1, err.String()))
 	}
 
-	ide.outputEntry.SetText(output.String())
+	ide.consoleOutput.SetText(output.String())
 }
 
 func (ide *IDE) showErrorsReport() {
@@ -419,4 +490,40 @@ func (ide *IDE) showCSTReport() {
 
 	dialog.ShowInformation("Reporte CST",
 		"Reporte generado exitosamente en cst_report.html", ide.window)
+}
+
+// Nuevo método para compilar a ARM64
+func (ide *IDE) compileToARM64() {
+	ide.outputTabs.SelectTab(ide.outputTabs.Items[1]) // Seleccionar tab de assembly
+	ide.assemblyOutput.SetText("Compilando a ARM64...\n\n")
+
+	astProgram, err := ide.buildAST()
+	if err != nil {
+		ide.assemblyOutput.SetText(fmt.Sprintf("Error: %v\n", err))
+		return
+	}
+
+	// Generar código ARM64
+	generator := arm64.NewARM64Generator()
+	assembly, err := generator.Generate(astProgram)
+	if err != nil {
+		ide.assemblyOutput.SetText(fmt.Sprintf("Error generando código ARM64: %v\n", err))
+		return
+	}
+
+	// Mostrar el código ensamblador generado
+	ide.assemblyOutput.SetText(assembly)
+
+	// Guardar el archivo .s si hay un archivo actual
+	if ide.currentFile != "" {
+		asmFile := strings.TrimSuffix(ide.currentFile, filepath.Ext(ide.currentFile)) + ".s"
+		err = ioutil.WriteFile(asmFile, []byte(assembly), 0644)
+		if err != nil {
+			ide.assemblyOutput.SetText(ide.assemblyOutput.Text +
+				fmt.Sprintf("\n\nError guardando archivo: %v", err))
+		} else {
+			ide.assemblyOutput.SetText(ide.assemblyOutput.Text +
+				fmt.Sprintf("\n\n✅ Archivo guardado como: %s", asmFile))
+		}
+	}
 }
