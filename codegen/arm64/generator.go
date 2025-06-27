@@ -2,29 +2,29 @@ package arm64
 
 import (
 	"compiler/ast"
-	"compiler/internal/base"
+	"compiler/codegen"
 	"fmt"
 	"strings"
 )
 
 // ARM64Generator genera código ensamblador ARM64
 type ARM64Generator struct {
-	*base.BaseGenerator        // Usa directamente del paquete base
-	currentFunction     string // Usa directamente del paquete base
-	stackOffset         int
-	labelCount          int
-	registers           *base.RegisterAllocator
-	stringLiterals      map[string]string // mapa de literales string a etiquetas
-	dataSection         []string          // sección .data
+	*codegen.BaseGenerator
+	currentFunction string
+	stackOffset     int
+	labelCount      int
+	registers       *RegisterAllocator
+	stringLiterals  map[string]string // mapa de literales string a etiquetas
+	dataSection     []string          // sección .data
 }
 
 // NewARM64Generator crea un nuevo generador ARM64
 func NewARM64Generator() *ARM64Generator {
 	return &ARM64Generator{
-		BaseGenerator:  base.NewBaseGenerator(),
+		BaseGenerator:  codegen.NewBaseGenerator(),
 		stackOffset:    0,
 		labelCount:     0,
-		registers:      base.NewRegisterAllocator(), // Creado desde base
+		registers:      NewRegisterAllocator(),
 		stringLiterals: make(map[string]string),
 		dataSection:    make([]string, 0),
 	}
@@ -109,7 +109,7 @@ func (g *ARM64Generator) reset() {
 	g.currentFunction = ""
 	g.stackOffset = 0
 	g.labelCount = 0
-	g.registers = base.NewRegisterAllocator()
+	g.registers = NewRegisterAllocator()
 	g.stringLiterals = make(map[string]string)
 	g.dataSection = make([]string, 0)
 }
@@ -617,7 +617,7 @@ func (g *ARM64Generator) allocateRegister() string {
 
 // freeRegister libera un registro
 func (g *ARM64Generator) freeRegister(reg string) {
-	g.registers.Free(base.Register(reg))
+	g.registers.Free(Register(reg))
 }
 
 // escapeString escapa caracteres especiales en strings
