@@ -152,9 +152,6 @@ func (ide *IDE) createMainContent() fyne.CanvasObject {
 	ide.assemblyOutput.Wrapping = fyne.TextWrapOff
 	ide.assemblyOutput.Disable()
 
-	// Mantener referencia para compatibilidad
-	ide.consoleOutput = ide.consoleOutput
-
 	// Tabs de salida
 	ide.outputTabs = container.NewAppTabs(
 		container.NewTabItem("Consola", container.NewVScroll(ide.consoleOutput)),

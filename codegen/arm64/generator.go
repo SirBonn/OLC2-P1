@@ -603,7 +603,7 @@ func (g *ARM64Generator) VisitDivAssign(node *ast.DivAssign) interface{} {
 }
 
 func (g *ARM64Generator) VisitModAssign(node *ast.ModAssign) interface{} {
-	g.Emit("\t// TODO: Modulo assign (%=)")
+	g.Emit("\t// TODO: Modulo assign")
 	return nil
 }
 
