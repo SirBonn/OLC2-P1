@@ -1,4 +1,4 @@
-package arm64
+package base
 
 import (
 	"fmt"
