@@ -1,3 +1,4 @@
+// generator.go
 package arm64
 
 import (
@@ -6,6 +7,33 @@ import (
 	"fmt"
 	"strings"
 )
+
+// VariableInfo contiene información sobre una variable
+type VariableInfo struct {
+	Name       string   // nombre de la variable
+	Type       string   // tipo de la variable
+	Offset     int      // offset en el stack frame (negativo desde x29)
+	Size       int      // tamaño en bytes
+	IsParam    bool     // si es un parámetro de función
+	Register   Register // registro asignado (si aplica)
+	InRegister bool     // si está actualmente en un registro
+}
+
+// getSize retorna el tamaño en bytes según el tipo
+func (vi *VariableInfo) getSize() int {
+	switch vi.Type {
+	case "int", "bool":
+		return 8 // 64 bits
+	case "string":
+		return 8 // puntero
+	case "f64", "float64":
+		return 8 // 64 bits
+	case "char":
+		return 1 // 8 bits
+	default:
+		return 8 // por defecto
+	}
+}
 
 // ARM64Generator genera código ensamblador ARM64
 type ARM64Generator struct {
@@ -17,13 +45,10 @@ type ARM64Generator struct {
 	stringLiterals  map[string]string // mapa de literales string a etiquetas
 	dataSection     []string          // sección .data
 
-	// Campos para manejar bucles anidados
-	currentLoopStart        string
-	currentLoopEnd          string
-	currentLoopContinue     string
-	currentLoopBreakUsed    bool
-	currentLoopContinueUsed bool           // etiqueta para continue
-	currentVars             map[string]int // Mapa de nombres de variables a offsets en el stack
+	// Sistema de variables
+	symbolTable        map[string]*VariableInfo   // tabla de símbolos
+	scopeStack         []map[string]*VariableInfo // stack de scopes
+	currentStackOffset int                        // offset actual del stack frame
 }
 
 // NewARM64Generator crea un nuevo generador ARM64
@@ -35,14 +60,18 @@ func NewARM64Generator() *ARM64Generator {
 		registers:      NewRegisterAllocator(),
 		stringLiterals: make(map[string]string),
 		dataSection:    make([]string, 0),
-		currentVars:    make(map[string]int),
+
+		// Sistema de variables
+		symbolTable:        make(map[string]*VariableInfo),
+		scopeStack:         make([]map[string]*VariableInfo, 0),
+		currentStackOffset: 0,
 	}
 }
 
 // Generate es el punto de entrada principal
 func (g *ARM64Generator) Generate(node ast.Node) (string, error) {
 	g.Reset()
-	fmt.Println("Iniciando generación de código ARM64...")
+
 	// El nodo debería ser un *ast.Program
 	program, ok := node.(*ast.Program)
 	if !ok {
@@ -51,13 +80,12 @@ func (g *ARM64Generator) Generate(node ast.Node) (string, error) {
 
 	// Visitar el programa para generar código
 	program.Accept(g)
-	fmt.Printf("Generación completada, errores: %v\n", g.HasErrors()) // Debug print
+
 	// Si hay errores, retornarlos
 	if g.HasErrors() {
 		return "", g.GetErrors()
 	}
-	output := g.buildFinalOutput()
-	fmt.Println("Código generado:\n", output) // Debug print del código generado
+
 	// Construir el output final
 	return g.buildFinalOutput(), nil
 }
@@ -66,32 +94,45 @@ func (g *ARM64Generator) Generate(node ast.Node) (string, error) {
 func (g *ARM64Generator) buildFinalOutput() string {
 	var output strings.Builder
 
-	// Sección de datos
-	output.WriteString(".data\n")
-	output.WriteString(".align 4\n")
-	output.WriteString("print_fmt: .asciz \"%d\"\n")     // Sin \n
-	output.WriteString("print_str_fmt: .asciz \"%s\"\n") // Sin \n
-	output.WriteString("print_space_fmt: .asciz \"%c\"\n")
+	// Sección de datos (strings, constantes, etc.)
+	if len(g.dataSection) > 0 || len(g.stringLiterals) > 0 {
+		output.WriteString(".data\n")
 
-	// String literals
-	for str, label := range g.stringLiterals {
-		output.WriteString(fmt.Sprintf("%s:\n", label))
-		output.WriteString(fmt.Sprintf("\t.asciz \"%s\"\n", escapeString(str)))
+		// Agregar string literals
+		for str, label := range g.stringLiterals {
+			output.WriteString(fmt.Sprintf("%s:\n", label))
+			output.WriteString(fmt.Sprintf("\t.asciz \"%s\"\n", escapeString(str)))
+		}
+
+		// Agregar otras entradas de la sección de datos
+		for _, data := range g.dataSection {
+			output.WriteString(data + "\n")
+		}
+
+		output.WriteString("\n")
 	}
-	output.WriteString("\n")
 
-	// Resto del código como estaba...
+	// Sección de texto (código)
 	output.WriteString(".text\n")
-	output.WriteString(".align 4\n")
+	output.WriteString(".global _start\n\n")
 
-	if g.hasMainFunction() {
-		output.WriteString(".global main\n")
-	} else {
-		output.WriteString(".global _start\n")
+	// Si no hay función main, crear un _start mínimo
+	if !g.hasMainFunction() {
+		output.WriteString("_start:\n")
+		output.WriteString("\t// No main function found, executing top-level code\n")
 	}
-	output.WriteString("\n")
 
+	// Agregar el código generado
 	output.WriteString(g.GetOutput())
+
+	// Si no terminamos con exit, agregarlo
+	if !strings.Contains(g.GetOutput(), "svc #0x80") {
+		output.WriteString("\n\t// Exit program\n")
+		output.WriteString("\tmov x0, #0\n")
+		output.WriteString("\tmov x16, #1\n")
+		output.WriteString("\tsvc #0x80\n")
+	}
+
 	return output.String()
 }
 
@@ -109,6 +150,11 @@ func (g *ARM64Generator) reset() {
 	g.registers = NewRegisterAllocator()
 	g.stringLiterals = make(map[string]string)
 	g.dataSection = make([]string, 0)
+
+	// Sistema de variables
+	g.symbolTable = make(map[string]*VariableInfo)
+	g.scopeStack = make([]map[string]*VariableInfo, 0)
+	g.currentStackOffset = 0
 }
 
 // newLabel genera una nueva etiqueta única
@@ -127,6 +173,109 @@ func (g *ARM64Generator) getStringLabel(str string) string {
 	label := g.newLabel("str")
 	g.stringLiterals[str] = label
 	return label
+}
+
+// === MÉTODOS PARA MANEJO DE VARIABLES ===
+
+// enterScope crea un nuevo scope
+func (g *ARM64Generator) enterScope() {
+	newScope := make(map[string]*VariableInfo)
+	g.scopeStack = append(g.scopeStack, newScope)
+}
+
+// exitScope sale del scope actual
+func (g *ARM64Generator) exitScope() {
+	if len(g.scopeStack) > 0 {
+		g.scopeStack = g.scopeStack[:len(g.scopeStack)-1]
+	}
+}
+
+// addVariable agrega una variable al scope actual
+func (g *ARM64Generator) addVariable(name, varType string) *VariableInfo {
+	// Calcular tamaño y offset
+	size := g.getTypeSize(varType)
+	g.currentStackOffset -= size
+
+	// Alinear a 8 bytes
+	if g.currentStackOffset%8 != 0 {
+		g.currentStackOffset -= (8 - (-g.currentStackOffset % 8))
+	}
+
+	varInfo := &VariableInfo{
+		Name:       name,
+		Type:       varType,
+		Offset:     g.currentStackOffset,
+		Size:       size,
+		IsParam:    false,
+		InRegister: false,
+	}
+
+	// Agregar al scope actual y tabla global
+	if len(g.scopeStack) > 0 {
+		g.scopeStack[len(g.scopeStack)-1][name] = varInfo
+	}
+	g.symbolTable[name] = varInfo
+
+	return varInfo
+}
+
+// findVariable busca una variable en los scopes
+func (g *ARM64Generator) findVariable(name string) *VariableInfo {
+	// Buscar en scopes desde el más reciente al más antiguo
+	for i := len(g.scopeStack) - 1; i >= 0; i-- {
+		if varInfo, exists := g.scopeStack[i][name]; exists {
+			return varInfo
+		}
+	}
+
+	// Buscar en tabla global como fallback
+	if varInfo, exists := g.symbolTable[name]; exists {
+		return varInfo
+	}
+
+	return nil
+}
+
+// getTypeSize retorna el tamaño en bytes de un tipo
+func (g *ARM64Generator) getTypeSize(varType string) int {
+	switch varType {
+	case "int", "bool":
+		return 8
+	case "string":
+		return 8 // puntero
+	case "f64", "float64":
+		return 8
+	case "char":
+		return 1
+	default:
+		return 8
+	}
+}
+
+// storeVariable almacena una variable en el stack
+func (g *ARM64Generator) storeVariable(varInfo *VariableInfo) {
+	g.Emit("\t// Store variable %s at offset %d", varInfo.Name, varInfo.Offset)
+	g.Emit("\tstr x0, [x29, #%d]", varInfo.Offset)
+}
+
+// loadVariable carga una variable desde el stack
+func (g *ARM64Generator) loadVariable(varInfo *VariableInfo) {
+	g.Emit("\t// Load variable %s from offset %d", varInfo.Name, varInfo.Offset)
+	g.Emit("\tldr x0, [x29, #%d]", varInfo.Offset)
+}
+
+// allocateStackSpace reserva espacio en el stack para variables locales
+func (g *ARM64Generator) allocateStackSpace() {
+	if g.currentStackOffset < 0 {
+		// Alinear a 16 bytes (requerimiento ARM64)
+		totalSize := -g.currentStackOffset
+		if totalSize%16 != 0 {
+			totalSize += 16 - (totalSize % 16)
+		}
+
+		g.Emit("\t// Allocate stack space for local variables")
+		g.Emit("\tsub sp, sp, #%d", totalSize)
+	}
 }
 
 // === IMPLEMENTACIÓN DEL VISITOR PATTERN ===
@@ -165,17 +314,15 @@ func (g *ARM64Generator) VisitProgram(node *ast.Program) interface{} {
 
 // VisitBinaryExpr genera código para expresiones binarias
 func (g *ARM64Generator) VisitBinaryExpr(node *ast.BinaryExpr) interface{} {
-	// CORRECCION: Usar registros callee-saved para evitar conflictos
-	leftReg := "x19"  // Registro callee-saved
-	rightReg := "x20" // Registro callee-saved
-
 	// Evaluar operando izquierdo
+	leftReg := g.allocateRegister()
 	node.Left.Accept(g)
-	g.Emit("\tmov %s, x0 // Guardar operando izquierdo", leftReg)
+	g.Emit("\tmov %s, x0", leftReg) // Asumimos que el resultado está en x0
 
 	// Evaluar operando derecho
+	rightReg := g.allocateRegister()
 	node.Right.Accept(g)
-	g.Emit("\tmov %s, x0 // Guardar operando derecho", rightReg)
+	g.Emit("\tmov %s, x0", rightReg)
 
 	// Realizar la operación
 	switch node.Operator {
@@ -188,8 +335,9 @@ func (g *ARM64Generator) VisitBinaryExpr(node *ast.BinaryExpr) interface{} {
 	case "/":
 		g.Emit("\tsdiv x0, %s, %s", leftReg, rightReg)
 	case "%":
-		g.Emit("\tsdiv x21, %s, %s", leftReg, rightReg)
-		g.Emit("\tmsub x0, x21, %s, %s", rightReg, leftReg)
+		// ARM64 no tiene instrucción de módulo directa
+		g.Emit("\tsdiv x2, %s, %s", leftReg, rightReg)
+		g.Emit("\tmsub x0, x2, %s, %s", rightReg, leftReg)
 	case "==":
 		g.Emit("\tcmp %s, %s", leftReg, rightReg)
 		g.Emit("\tcset x0, eq")
@@ -215,6 +363,10 @@ func (g *ARM64Generator) VisitBinaryExpr(node *ast.BinaryExpr) interface{} {
 	default:
 		g.AddError(fmt.Errorf("unsupported binary operator: %s", node.Operator))
 	}
+
+	// Liberar registros
+	g.freeRegister(leftReg)
+	g.freeRegister(rightReg)
 
 	return nil
 }
@@ -269,99 +421,109 @@ func (g *ARM64Generator) VisitLiteral(node *ast.Literal) interface{} {
 
 // VisitIdentifier genera código para identificadores
 func (g *ARM64Generator) VisitIdentifier(node *ast.Identifier) interface{} {
-	if offset, exists := g.currentVars[node.Name]; exists {
-		// CORRECCION: Cargar usando offset positivo
-		g.Emit("\tldr x0, [x29, #%d] // Load %s", offset, node.Name)
-	} else {
-		g.AddError(fmt.Errorf("variable no declarada: %s", node.Name))
-		g.Emit("\tmov x0, #0 // variable no encontrada")
+	// Buscar la variable en la tabla de símbolos
+	varInfo := g.findVariable(node.Name)
+	if varInfo == nil {
+		g.AddError(fmt.Errorf("undefined variable: %s", node.Name))
+		g.Emit("\tmov x0, #0 // undefined variable")
+		return nil
 	}
+
+	// Cargar la variable
+	g.loadVariable(varInfo)
 	return nil
 }
 
 // VisitPrintStmt genera código para print/println
 func (g *ARM64Generator) VisitPrintStmt(node *ast.PrintStmt) interface{} {
-	// Guardar registros que usaremos
-	g.Emit("\tstp x19, x20, [sp, #-16]!")
+	g.Emit("\t// Print statement")
 
-	// Procesar todos los argumentos primero
 	for i, arg := range node.Arguments {
-		arg.Accept(g) // El valor a imprimir queda en x0
+		// Evaluar el argumento
+		arg.Accept(g)
 
-		// Determinar el formato adecuado
-		switch arg.(type) {
-		case *ast.Literal:
-			if lit, ok := arg.(*ast.Literal); ok && lit.Type == "string" {
-				g.Emit("\tadrp x19, print_str_fmt")
-				g.Emit("\tadd x19, x19, :lo12:print_str_fmt")
-			} else {
-				g.Emit("\tadrp x19, print_fmt")
-				g.Emit("\tadd x19, x19, :lo12:print_fmt")
-			}
-		default:
-			g.Emit("\tadrp x19, print_fmt")
-			g.Emit("\tadd x19, x19, :lo12:print_fmt")
-		}
+		// Por ahora, solo imprimimos enteros
+		// TODO: Manejar diferentes tipos
+		g.Emit("\t// Print integer value")
+		g.Emit("\tmov x1, x0")        // valor a imprimir
+		g.Emit("\tadr x0, print_fmt") // formato (necesitaríamos agregarlo a .data)
+		g.Emit("\tbl printf")         // llamar a printf
 
-		g.Emit("\tmov x20, x0") // Guardar el valor
-		g.Emit("\tmov x0, x19") // Formato
-		g.Emit("\tmov x1, x20") // Valor
-
-		// Para todos menos el último, usar espacio como separador
+		// Agregar espacio entre argumentos (excepto el último)
 		if i < len(node.Arguments)-1 {
-			g.Emit("\tmov x2, #' '") // Separador de espacio
-			g.Emit("\tbl printf")
-		} else {
-			g.Emit("\tbl printf")
+			g.Emit("\t// Print space")
+			g.Emit("\tmov x0, #32") // ASCII space
+			g.Emit("\tbl putchar")
 		}
 	}
 
-	// Solo agregar newline si es println (node.NewLine)
+	// Agregar newline si es println
 	if node.NewLine {
-		g.Emit("\tmov x0, #10")
+		g.Emit("\t// Print newline")
+		g.Emit("\tmov x0, #10") // ASCII newline
 		g.Emit("\tbl putchar")
 	}
 
-	// Restaurar registros
-	g.Emit("\tldp x19, x20, [sp], #16")
 	return nil
 }
 
 // VisitVarDecl genera código para declaraciones de variables
 func (g *ARM64Generator) VisitVarDecl(node *ast.VarDecl) interface{} {
-	// El offset ya fue establecido en VisitFuncDecl
-	offset, exists := g.currentVars[node.Name]
-	if !exists {
-		g.AddError(fmt.Errorf("offset no encontrado para variable %s", node.Name))
-		return nil
+	g.Emit("\t// Variable declaration: %s", node.Name)
+
+	// Determinar el tipo (si no está especificado, inferir del valor)
+	varType := "int" // tipo por defecto
+	if node.Type != "" {
+		varType = node.Type
 	}
 
-	// Generar código para el valor inicial
+	// Agregar variable a la tabla de símbolos
+	varInfo := g.addVariable(node.Name, varType)
+
+	// Evaluar el valor inicial
 	if node.Value != nil {
 		node.Value.Accept(g)
 	} else {
-		g.Emit("\tmov x0, #0")
+		// Valor por defecto según el tipo
+		switch varType {
+		case "int":
+			g.Emit("\tmov x0, #0")
+		case "bool":
+			g.Emit("\tmov x0, #0") // false
+		case "string":
+			g.Emit("\tmov x0, #0") // null string
+		default:
+			g.Emit("\tmov x0, #0")
+		}
 	}
 
 	// Almacenar en el stack
-	g.Emit("\tstr x0, [x29, #%d] // Store %s", offset, node.Name)
+	g.storeVariable(varInfo)
 
 	return nil
 }
 
 // VisitAssignment genera código para asignaciones
 func (g *ARM64Generator) VisitAssignment(node *ast.Assignment) interface{} {
-	// Evaluar el valor de la derecha
+	g.Emit("\t// Assignment")
+
+	// Evaluar el valor
 	node.Value.Accept(g)
 
+	// Obtener el target (debe ser un identificador)
 	if id, ok := node.Target.(*ast.Identifier); ok {
-		if offset, exists := g.currentVars[id.Name]; exists {
-			// CORRECCION: Almacenar usando offset positivo
-			g.Emit("\tstr x0, [x29, #%d] // Store to %s", offset, id.Name)
-		} else {
-			g.AddError(fmt.Errorf("variable no declarada: %s", id.Name))
+		varInfo := g.findVariable(id.Name)
+		if varInfo == nil {
+			g.AddError(fmt.Errorf("undefined variable: %s", id.Name))
+			return nil
 		}
+
+		// Almacenar el valor
+		g.storeVariable(varInfo)
+	} else {
+		g.AddError(fmt.Errorf("assignment target must be an identifier"))
 	}
+
 	return nil
 }
 
@@ -436,53 +598,55 @@ func (g *ARM64Generator) VisitWhileStmt(node *ast.WhileStmt) interface{} {
 func (g *ARM64Generator) VisitFuncDecl(node *ast.FuncDecl) interface{} {
 	g.currentFunction = node.Name
 	g.stackOffset = 0
-	g.currentVars = make(map[string]int)
+	g.currentStackOffset = 0 // Reset stack offset para esta función
 
-	// Calcular espacio necesario para variables (8 bytes cada una)
-	varCount := 0
-	for _, stmt := range node.Body {
-		if _, ok := stmt.(*ast.VarDecl); ok {
-			varCount++
-		}
+	// Si es main, también crear _start
+	if node.Name == "main" {
+		g.Emit("_start:")
+		g.Emit("\tbl main")
+		g.Emit("\t// Exit after main")
+		g.Emit("\tmov x0, #0")
+		g.Emit("\tmov x16, #1")
+		g.Emit("\tsvc #0x80")
+		g.Emit("")
 	}
 
-	// Stack layout:
-	// - 16 bytes: x29, x30 (frame pointer, link register)
-	// - 16 bytes: x19, x20 (callee-saved)
-	// - 8 bytes: x21 (callee-saved)
-	// - 8 bytes por variable
-	// Total alineado a 16 bytes
-	stackSize := ((16 + 16 + 8 + (varCount * 8)) + 15) &^ 15
-
-	// Prologue
+	// Etiqueta de la función
 	g.Emit("%s:", node.Name)
-	g.Emit("\tstp x29, x30, [sp, #-%d]!", stackSize)
+
+	// Prólogo
+	g.Emit("\t// Function prologue")
+	g.Emit("\tstp x29, x30, [sp, #-16]!")
 	g.Emit("\tmov x29, sp")
-	g.Emit("\tstp x19, x20, [sp, #16]")
-	g.Emit("\tstr x21, [sp, #32]")
 
-	// Asignar offsets a variables
-	varOffset := 40 // Después de los registros guardados
-	for _, stmt := range node.Body {
-		if decl, ok := stmt.(*ast.VarDecl); ok {
-			g.currentVars[decl.Name] = varOffset
-			varOffset += 8
-		}
-	}
+	// TODO: Configurar parámetros
 
-	// Generar cuerpo de la función
+	// Crear scope para la función
+	g.enterScope()
+
+	// Generar código del cuerpo
 	for _, stmt := range node.Body {
 		stmt.Accept(g)
 	}
 
-	// Epilogue
-	g.Emit("\tmov x0, #0") // Valor de retorno por defecto
-	g.Emit("\tldr x21, [sp, #32]")
-	g.Emit("\tldp x19, x20, [sp, #16]")
-	g.Emit("\tldp x29, x30, [sp], #%d", stackSize)
+	// Reservar espacio para variables locales si es necesario
+	if g.currentStackOffset < 0 {
+		// Insertar código de asignación de stack después del prólogo
+		// (esto es una simplificación, idealmente se haría antes)
+		g.allocateStackSpace()
+	}
+
+	// Salir del scope
+	g.exitScope()
+
+	// Epílogo (si no hay return explícito)
+	g.Emit("\t// Function epilogue")
+	g.Emit("\tldp x29, x30, [sp], #16")
 	g.Emit("\tret")
+	g.Emit("")
 
 	g.currentFunction = ""
+
 	return nil
 }
 
@@ -530,22 +694,12 @@ func (g *ARM64Generator) VisitFuncCall(node *ast.FuncCall) interface{} {
 }
 
 func (g *ARM64Generator) VisitBreak(node *ast.Break) interface{} {
-	if g.currentLoopEnd == "" {
-		g.AddError(fmt.Errorf("break fuera de bucle en línea %d", node.Line))
-		return nil
-	}
-	g.Emit("\tb %s  // break", g.currentLoopEnd)
-	g.currentLoopBreakUsed = true
+	g.Emit("\t// TODO: Break statement")
 	return nil
 }
 
 func (g *ARM64Generator) VisitContinue(node *ast.Continue) interface{} {
-	if g.currentLoopContinue == "" {
-		g.AddError(fmt.Errorf("continue fuera de bucle en línea %d", node.Line))
-		return nil
-	}
-	g.Emit("\tb %s  // continue", g.currentLoopContinue)
-	g.currentLoopContinueUsed = true
+	g.Emit("\t// TODO: Continue statement")
 	return nil
 }
 
@@ -575,41 +729,12 @@ func (g *ARM64Generator) VisitExpressionStatement(node *ast.ExpressionStatement)
 	return nil
 }
 
+// Implementar los nuevos tipos de for
 func (g *ARM64Generator) VisitForCondition(node *ast.ForCondition) interface{} {
-	startLabel := g.newLabel("for_start")
-	endLabel := g.newLabel("for_end")
-
-	// Guardar contexto del bucle actual
-	prevStart := g.currentLoopStart
-	prevEnd := g.currentLoopEnd
-	g.currentLoopStart = startLabel
-	g.currentLoopEnd = endLabel
-
-	g.Emit("%s:", startLabel)
-
-	// Generar código para la condición
-	node.Condition.Accept(g)
-
-	// Saltar al final si la condición es falsa
-	g.Emit("\tcbz x0, %s", endLabel)
-
-	// Generar cuerpo del bucle
-	for _, stmt := range node.Body {
-		stmt.Accept(g)
-	}
-
-	// Volver al inicio
-	g.Emit("\tb %s", startLabel)
-
-	// Etiqueta de fin
-	g.Emit("%s:", endLabel)
-
-	// Restaurar contexto del bucle
-	g.currentLoopStart = prevStart
-	g.currentLoopEnd = prevEnd
-
+	g.Emit("\t// TODO: For with condition")
 	return nil
 }
+
 func (g *ARM64Generator) VisitForClassic(node *ast.ForClassic) interface{} {
 	g.Emit("\t// TODO: Classic for loop")
 	return nil
@@ -650,29 +775,189 @@ func (g *ARM64Generator) VisitFallthrough(node *ast.Fallthrough) interface{} {
 	return nil
 }
 
-// Implementar compound assignments
 func (g *ARM64Generator) VisitPlusAssign(node *ast.PlusAssign) interface{} {
-	g.Emit("\t// TODO: Plus assign (+=)")
+	g.Emit("\t// Plus assign (+=)")
+
+	// Obtener el target (debe ser un identificador)
+	if id, ok := node.Target.(*ast.Identifier); ok {
+		varInfo := g.findVariable(id.Name)
+		if varInfo == nil {
+			g.AddError(fmt.Errorf("undefined variable: %s", id.Name))
+			return nil
+		}
+
+		// Cargar la variable actual
+		g.loadVariable(varInfo)
+		leftReg := g.allocateRegister()
+		g.Emit("\tmov %s, x0", leftReg)
+
+		// Evaluar la expresión del lado derecho
+		node.Value.Accept(g)
+		rightReg := g.allocateRegister()
+		g.Emit("\tmov %s, x0", rightReg)
+
+		// Realizar la suma
+		g.Emit("\tadd x0, %s, %s", leftReg, rightReg)
+
+		// Almacenar el resultado
+		g.storeVariable(varInfo)
+
+		// Liberar registros
+		g.freeRegister(leftReg)
+		g.freeRegister(rightReg)
+	} else {
+		g.AddError(fmt.Errorf("compound assignment target must be an identifier"))
+	}
+
 	return nil
 }
 
 func (g *ARM64Generator) VisitMinusAssign(node *ast.MinusAssign) interface{} {
-	g.Emit("\t// TODO: Minus assign (-=)")
+	g.Emit("\t// Minus assign (-=)")
+
+	// Obtener el target (debe ser un identificador)
+	if id, ok := node.Target.(*ast.Identifier); ok {
+		varInfo := g.findVariable(id.Name)
+		if varInfo == nil {
+			g.AddError(fmt.Errorf("undefined variable: %s", id.Name))
+			return nil
+		}
+
+		// Cargar la variable actual
+		g.loadVariable(varInfo)
+		leftReg := g.allocateRegister()
+		g.Emit("\tmov %s, x0", leftReg)
+
+		// Evaluar la expresión del lado derecho
+		node.Value.Accept(g)
+		rightReg := g.allocateRegister()
+		g.Emit("\tmov %s, x0", rightReg)
+
+		// Realizar la resta
+		g.Emit("\tsub x0, %s, %s", leftReg, rightReg)
+
+		// Almacenar el resultado
+		g.storeVariable(varInfo)
+
+		// Liberar registros
+		g.freeRegister(leftReg)
+		g.freeRegister(rightReg)
+	} else {
+		g.AddError(fmt.Errorf("compound assignment target must be an identifier"))
+	}
+
 	return nil
 }
 
 func (g *ARM64Generator) VisitMulAssign(node *ast.MulAssign) interface{} {
-	g.Emit("\t// TODO: Multiply assign (*=)")
+	g.Emit("\t// Multiply assign (*=)")
+
+	// Obtener el target (debe ser un identificador)
+	if id, ok := node.Target.(*ast.Identifier); ok {
+		varInfo := g.findVariable(id.Name)
+		if varInfo == nil {
+			g.AddError(fmt.Errorf("undefined variable: %s", id.Name))
+			return nil
+		}
+
+		// Cargar la variable actual
+		g.loadVariable(varInfo)
+		leftReg := g.allocateRegister()
+		g.Emit("\tmov %s, x0", leftReg)
+
+		// Evaluar la expresión del lado derecho
+		node.Value.Accept(g)
+		rightReg := g.allocateRegister()
+		g.Emit("\tmov %s, x0", rightReg)
+
+		// Realizar la multiplicación
+		g.Emit("\tmul x0, %s, %s", leftReg, rightReg)
+
+		// Almacenar el resultado
+		g.storeVariable(varInfo)
+
+		// Liberar registros
+		g.freeRegister(leftReg)
+		g.freeRegister(rightReg)
+	} else {
+		g.AddError(fmt.Errorf("compound assignment target must be an identifier"))
+	}
+
 	return nil
 }
 
 func (g *ARM64Generator) VisitDivAssign(node *ast.DivAssign) interface{} {
-	g.Emit("\t// TODO: Divide assign (/=)")
+	g.Emit("\t// Divide assign (/=)")
+
+	// Obtener el target (debe ser un identificador)
+	if id, ok := node.Target.(*ast.Identifier); ok {
+		varInfo := g.findVariable(id.Name)
+		if varInfo == nil {
+			g.AddError(fmt.Errorf("undefined variable: %s", id.Name))
+			return nil
+		}
+
+		// Cargar la variable actual
+		g.loadVariable(varInfo)
+		leftReg := g.allocateRegister()
+		g.Emit("\tmov %s, x0", leftReg)
+
+		// Evaluar la expresión del lado derecho
+		node.Value.Accept(g)
+		rightReg := g.allocateRegister()
+		g.Emit("\tmov %s, x0", rightReg)
+
+		// Realizar la división
+		g.Emit("\tsdiv x0, %s, %s", leftReg, rightReg)
+
+		// Almacenar el resultado
+		g.storeVariable(varInfo)
+
+		// Liberar registros
+		g.freeRegister(leftReg)
+		g.freeRegister(rightReg)
+	} else {
+		g.AddError(fmt.Errorf("compound assignment target must be an identifier"))
+	}
+
 	return nil
 }
 
 func (g *ARM64Generator) VisitModAssign(node *ast.ModAssign) interface{} {
-	g.Emit("\t// TODO: Modulo assign")
+	g.Emit("\t// Modulo assign (%=)")
+
+	// Obtener el target (debe ser un identificador)
+	if id, ok := node.Target.(*ast.Identifier); ok {
+		varInfo := g.findVariable(id.Name)
+		if varInfo == nil {
+			g.AddError(fmt.Errorf("undefined variable: %s", id.Name))
+			return nil
+		}
+
+		// Cargar la variable actual
+		g.loadVariable(varInfo)
+		leftReg := g.allocateRegister()
+		g.Emit("\tmov %s, x0", leftReg)
+
+		// Evaluar la expresión del lado derecho
+		node.Value.Accept(g)
+		rightReg := g.allocateRegister()
+		g.Emit("\tmov %s, x0", rightReg)
+
+		// Realizar el módulo (ARM64 no tiene instrucción directa)
+		g.Emit("\tsdiv x2, %s, %s", leftReg, rightReg)
+		g.Emit("\tmsub x0, x2, %s, %s", rightReg, leftReg)
+
+		// Almacenar el resultado
+		g.storeVariable(varInfo)
+
+		// Liberar registros
+		g.freeRegister(leftReg)
+		g.freeRegister(rightReg)
+	} else {
+		g.AddError(fmt.Errorf("compound assignment target must be an identifier"))
+	}
+
 	return nil
 }
 

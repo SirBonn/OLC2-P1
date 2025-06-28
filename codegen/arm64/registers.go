@@ -1,3 +1,4 @@
+// registers.go
 package arm64
 
 import (
