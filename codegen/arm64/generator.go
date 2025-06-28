@@ -16,6 +16,14 @@ type ARM64Generator struct {
 	registers       *RegisterAllocator
 	stringLiterals  map[string]string // mapa de literales string a etiquetas
 	dataSection     []string          // sección .data
+
+	// Campos para manejar bucles anidados
+	currentLoopStart        string
+	currentLoopEnd          string
+	currentLoopContinue     string
+	currentLoopBreakUsed    bool
+	currentLoopContinueUsed bool           // etiqueta para continue
+	currentVars             map[string]int // Mapa de nombres de variables a offsets en el stack
 }
 
 // NewARM64Generator crea un nuevo generador ARM64
@@ -27,13 +35,14 @@ func NewARM64Generator() *ARM64Generator {
 		registers:      NewRegisterAllocator(),
 		stringLiterals: make(map[string]string),
 		dataSection:    make([]string, 0),
+		currentVars:    make(map[string]int),
 	}
 }
 
 // Generate es el punto de entrada principal
 func (g *ARM64Generator) Generate(node ast.Node) (string, error) {
 	g.Reset()
-
+	fmt.Println("Iniciando generación de código ARM64...")
 	// El nodo debería ser un *ast.Program
 	program, ok := node.(*ast.Program)
 	if !ok {
@@ -42,12 +51,13 @@ func (g *ARM64Generator) Generate(node ast.Node) (string, error) {
 
 	// Visitar el programa para generar código
 	program.Accept(g)
-
+	fmt.Printf("Generación completada, errores: %v\n", g.HasErrors()) // Debug print
 	// Si hay errores, retornarlos
 	if g.HasErrors() {
 		return "", g.GetErrors()
 	}
-
+	output := g.buildFinalOutput()
+	fmt.Println("Código generado:\n", output) // Debug print del código generado
 	// Construir el output final
 	return g.buildFinalOutput(), nil
 }
@@ -56,45 +66,32 @@ func (g *ARM64Generator) Generate(node ast.Node) (string, error) {
 func (g *ARM64Generator) buildFinalOutput() string {
 	var output strings.Builder
 
-	// Sección de datos (strings, constantes, etc.)
-	if len(g.dataSection) > 0 || len(g.stringLiterals) > 0 {
-		output.WriteString(".data\n")
+	// Sección de datos
+	output.WriteString(".data\n")
+	output.WriteString(".align 4\n")
+	output.WriteString("print_fmt: .asciz \"%d\"\n")     // Sin \n
+	output.WriteString("print_str_fmt: .asciz \"%s\"\n") // Sin \n
+	output.WriteString("print_space_fmt: .asciz \"%c\"\n")
 
-		// Agregar string literals
-		for str, label := range g.stringLiterals {
-			output.WriteString(fmt.Sprintf("%s:\n", label))
-			output.WriteString(fmt.Sprintf("\t.asciz \"%s\"\n", escapeString(str)))
-		}
-
-		// Agregar otras entradas de la sección de datos
-		for _, data := range g.dataSection {
-			output.WriteString(data + "\n")
-		}
-
-		output.WriteString("\n")
+	// String literals
+	for str, label := range g.stringLiterals {
+		output.WriteString(fmt.Sprintf("%s:\n", label))
+		output.WriteString(fmt.Sprintf("\t.asciz \"%s\"\n", escapeString(str)))
 	}
+	output.WriteString("\n")
 
-	// Sección de texto (código)
+	// Resto del código como estaba...
 	output.WriteString(".text\n")
-	output.WriteString(".global _start\n\n")
+	output.WriteString(".align 4\n")
 
-	// Si no hay función main, crear un _start mínimo
-	if !g.hasMainFunction() {
-		output.WriteString("_start:\n")
-		output.WriteString("\t// No main function found, executing top-level code\n")
+	if g.hasMainFunction() {
+		output.WriteString(".global main\n")
+	} else {
+		output.WriteString(".global _start\n")
 	}
+	output.WriteString("\n")
 
-	// Agregar el código generado
 	output.WriteString(g.GetOutput())
-
-	// Si no terminamos con exit, agregarlo
-	if !strings.Contains(g.GetOutput(), "svc #0x80") {
-		output.WriteString("\n\t// Exit program\n")
-		output.WriteString("\tmov x0, #0\n")
-		output.WriteString("\tmov x16, #1\n")
-		output.WriteString("\tsvc #0x80\n")
-	}
-
 	return output.String()
 }
 
@@ -168,15 +165,17 @@ func (g *ARM64Generator) VisitProgram(node *ast.Program) interface{} {
 
 // VisitBinaryExpr genera código para expresiones binarias
 func (g *ARM64Generator) VisitBinaryExpr(node *ast.BinaryExpr) interface{} {
+	// CORRECCION: Usar registros callee-saved para evitar conflictos
+	leftReg := "x19"  // Registro callee-saved
+	rightReg := "x20" // Registro callee-saved
+
 	// Evaluar operando izquierdo
-	leftReg := g.allocateRegister()
 	node.Left.Accept(g)
-	g.Emit("\tmov %s, x0", leftReg) // Asumimos que el resultado está en x0
+	g.Emit("\tmov %s, x0 // Guardar operando izquierdo", leftReg)
 
 	// Evaluar operando derecho
-	rightReg := g.allocateRegister()
 	node.Right.Accept(g)
-	g.Emit("\tmov %s, x0", rightReg)
+	g.Emit("\tmov %s, x0 // Guardar operando derecho", rightReg)
 
 	// Realizar la operación
 	switch node.Operator {
@@ -189,9 +188,8 @@ func (g *ARM64Generator) VisitBinaryExpr(node *ast.BinaryExpr) interface{} {
 	case "/":
 		g.Emit("\tsdiv x0, %s, %s", leftReg, rightReg)
 	case "%":
-		// ARM64 no tiene instrucción de módulo directa
-		g.Emit("\tsdiv x2, %s, %s", leftReg, rightReg)
-		g.Emit("\tmsub x0, x2, %s, %s", rightReg, leftReg)
+		g.Emit("\tsdiv x21, %s, %s", leftReg, rightReg)
+		g.Emit("\tmsub x0, x21, %s, %s", rightReg, leftReg)
 	case "==":
 		g.Emit("\tcmp %s, %s", leftReg, rightReg)
 		g.Emit("\tcset x0, eq")
@@ -217,10 +215,6 @@ func (g *ARM64Generator) VisitBinaryExpr(node *ast.BinaryExpr) interface{} {
 	default:
 		g.AddError(fmt.Errorf("unsupported binary operator: %s", node.Operator))
 	}
-
-	// Liberar registros
-	g.freeRegister(leftReg)
-	g.freeRegister(rightReg)
 
 	return nil
 }
@@ -275,75 +269,99 @@ func (g *ARM64Generator) VisitLiteral(node *ast.Literal) interface{} {
 
 // VisitIdentifier genera código para identificadores
 func (g *ARM64Generator) VisitIdentifier(node *ast.Identifier) interface{} {
-	// Por ahora, solo un placeholder
-	g.Emit("\t// TODO: Load variable %s", node.Name)
-	g.Emit("\tmov x0, #0 // placeholder")
+	if offset, exists := g.currentVars[node.Name]; exists {
+		// CORRECCION: Cargar usando offset positivo
+		g.Emit("\tldr x0, [x29, #%d] // Load %s", offset, node.Name)
+	} else {
+		g.AddError(fmt.Errorf("variable no declarada: %s", node.Name))
+		g.Emit("\tmov x0, #0 // variable no encontrada")
+	}
 	return nil
 }
 
 // VisitPrintStmt genera código para print/println
 func (g *ARM64Generator) VisitPrintStmt(node *ast.PrintStmt) interface{} {
-	g.Emit("\t// Print statement")
+	// Guardar registros que usaremos
+	g.Emit("\tstp x19, x20, [sp, #-16]!")
 
+	// Procesar todos los argumentos primero
 	for i, arg := range node.Arguments {
-		// Evaluar el argumento
-		arg.Accept(g)
+		arg.Accept(g) // El valor a imprimir queda en x0
 
-		// Por ahora, solo imprimimos enteros
-		// TODO: Manejar diferentes tipos
-		g.Emit("\t// Print integer value")
-		g.Emit("\tmov x1, x0")        // valor a imprimir
-		g.Emit("\tadr x0, print_fmt") // formato (necesitaríamos agregarlo a .data)
-		g.Emit("\tbl printf")         // llamar a printf
+		// Determinar el formato adecuado
+		switch arg.(type) {
+		case *ast.Literal:
+			if lit, ok := arg.(*ast.Literal); ok && lit.Type == "string" {
+				g.Emit("\tadrp x19, print_str_fmt")
+				g.Emit("\tadd x19, x19, :lo12:print_str_fmt")
+			} else {
+				g.Emit("\tadrp x19, print_fmt")
+				g.Emit("\tadd x19, x19, :lo12:print_fmt")
+			}
+		default:
+			g.Emit("\tadrp x19, print_fmt")
+			g.Emit("\tadd x19, x19, :lo12:print_fmt")
+		}
 
-		// Agregar espacio entre argumentos (excepto el último)
+		g.Emit("\tmov x20, x0") // Guardar el valor
+		g.Emit("\tmov x0, x19") // Formato
+		g.Emit("\tmov x1, x20") // Valor
+
+		// Para todos menos el último, usar espacio como separador
 		if i < len(node.Arguments)-1 {
-			g.Emit("\t// Print space")
-			g.Emit("\tmov x0, #32") // ASCII space
-			g.Emit("\tbl putchar")
+			g.Emit("\tmov x2, #' '") // Separador de espacio
+			g.Emit("\tbl printf")
+		} else {
+			g.Emit("\tbl printf")
 		}
 	}
 
-	// Agregar newline si es println
+	// Solo agregar newline si es println (node.NewLine)
 	if node.NewLine {
-		g.Emit("\t// Print newline")
-		g.Emit("\tmov x0, #10") // ASCII newline
+		g.Emit("\tmov x0, #10")
 		g.Emit("\tbl putchar")
 	}
 
+	// Restaurar registros
+	g.Emit("\tldp x19, x20, [sp], #16")
 	return nil
 }
 
 // VisitVarDecl genera código para declaraciones de variables
 func (g *ARM64Generator) VisitVarDecl(node *ast.VarDecl) interface{} {
-	g.Emit("\t// Variable declaration: %s", node.Name)
+	// El offset ya fue establecido en VisitFuncDecl
+	offset, exists := g.currentVars[node.Name]
+	if !exists {
+		g.AddError(fmt.Errorf("offset no encontrado para variable %s", node.Name))
+		return nil
+	}
 
-	// Evaluar el valor inicial
+	// Generar código para el valor inicial
 	if node.Value != nil {
 		node.Value.Accept(g)
 	} else {
-		// Valor por defecto
 		g.Emit("\tmov x0, #0")
 	}
 
-	// TODO: Almacenar en el stack o en registros según el contexto
-	g.Emit("\t// TODO: Store variable %s", node.Name)
+	// Almacenar en el stack
+	g.Emit("\tstr x0, [x29, #%d] // Store %s", offset, node.Name)
 
 	return nil
 }
 
 // VisitAssignment genera código para asignaciones
 func (g *ARM64Generator) VisitAssignment(node *ast.Assignment) interface{} {
-	g.Emit("\t// Assignment")
-
-	// Evaluar el valor
+	// Evaluar el valor de la derecha
 	node.Value.Accept(g)
 
-	// TODO: Almacenar en la variable objetivo
 	if id, ok := node.Target.(*ast.Identifier); ok {
-		g.Emit("\t// TODO: Store to variable %s", id.Name)
+		if offset, exists := g.currentVars[id.Name]; exists {
+			// CORRECCION: Almacenar usando offset positivo
+			g.Emit("\tstr x0, [x29, #%d] // Store to %s", offset, id.Name)
+		} else {
+			g.AddError(fmt.Errorf("variable no declarada: %s", id.Name))
+		}
 	}
-
 	return nil
 }
 
@@ -418,41 +436,53 @@ func (g *ARM64Generator) VisitWhileStmt(node *ast.WhileStmt) interface{} {
 func (g *ARM64Generator) VisitFuncDecl(node *ast.FuncDecl) interface{} {
 	g.currentFunction = node.Name
 	g.stackOffset = 0
+	g.currentVars = make(map[string]int)
 
-	// Si es main, también crear _start
-	if node.Name == "main" {
-		g.Emit("_start:")
-		g.Emit("\tbl main")
-		g.Emit("\t// Exit after main")
-		g.Emit("\tmov x0, #0")
-		g.Emit("\tmov x16, #1")
-		g.Emit("\tsvc #0x80")
-		g.Emit("")
+	// Calcular espacio necesario para variables (8 bytes cada una)
+	varCount := 0
+	for _, stmt := range node.Body {
+		if _, ok := stmt.(*ast.VarDecl); ok {
+			varCount++
+		}
 	}
 
-	// Etiqueta de la función
+	// Stack layout:
+	// - 16 bytes: x29, x30 (frame pointer, link register)
+	// - 16 bytes: x19, x20 (callee-saved)
+	// - 8 bytes: x21 (callee-saved)
+	// - 8 bytes por variable
+	// Total alineado a 16 bytes
+	stackSize := ((16 + 16 + 8 + (varCount * 8)) + 15) &^ 15
+
+	// Prologue
 	g.Emit("%s:", node.Name)
-
-	// Prólogo
-	g.Emit("\t// Function prologue")
-	g.Emit("\tstp x29, x30, [sp, #-16]!")
+	g.Emit("\tstp x29, x30, [sp, #-%d]!", stackSize)
 	g.Emit("\tmov x29, sp")
+	g.Emit("\tstp x19, x20, [sp, #16]")
+	g.Emit("\tstr x21, [sp, #32]")
 
-	// TODO: Configurar parámetros
+	// Asignar offsets a variables
+	varOffset := 40 // Después de los registros guardados
+	for _, stmt := range node.Body {
+		if decl, ok := stmt.(*ast.VarDecl); ok {
+			g.currentVars[decl.Name] = varOffset
+			varOffset += 8
+		}
+	}
 
-	// Generar código del cuerpo
+	// Generar cuerpo de la función
 	for _, stmt := range node.Body {
 		stmt.Accept(g)
 	}
 
-	// Epílogo (si no hay return explícito)
-	g.Emit("\t// Function epilogue")
-	g.Emit("\tldp x29, x30, [sp], #16")
+	// Epilogue
+	g.Emit("\tmov x0, #0") // Valor de retorno por defecto
+	g.Emit("\tldr x21, [sp, #32]")
+	g.Emit("\tldp x19, x20, [sp, #16]")
+	g.Emit("\tldp x29, x30, [sp], #%d", stackSize)
 	g.Emit("\tret")
-	g.Emit("")
 
 	g.currentFunction = ""
-
 	return nil
 }
 
@@ -500,12 +530,22 @@ func (g *ARM64Generator) VisitFuncCall(node *ast.FuncCall) interface{} {
 }
 
 func (g *ARM64Generator) VisitBreak(node *ast.Break) interface{} {
-	g.Emit("\t// TODO: Break statement")
+	if g.currentLoopEnd == "" {
+		g.AddError(fmt.Errorf("break fuera de bucle en línea %d", node.Line))
+		return nil
+	}
+	g.Emit("\tb %s  // break", g.currentLoopEnd)
+	g.currentLoopBreakUsed = true
 	return nil
 }
 
 func (g *ARM64Generator) VisitContinue(node *ast.Continue) interface{} {
-	g.Emit("\t// TODO: Continue statement")
+	if g.currentLoopContinue == "" {
+		g.AddError(fmt.Errorf("continue fuera de bucle en línea %d", node.Line))
+		return nil
+	}
+	g.Emit("\tb %s  // continue", g.currentLoopContinue)
+	g.currentLoopContinueUsed = true
 	return nil
 }
 
@@ -535,12 +575,41 @@ func (g *ARM64Generator) VisitExpressionStatement(node *ast.ExpressionStatement)
 	return nil
 }
 
-// Implementar los nuevos tipos de for
 func (g *ARM64Generator) VisitForCondition(node *ast.ForCondition) interface{} {
-	g.Emit("\t// TODO: For with condition")
+	startLabel := g.newLabel("for_start")
+	endLabel := g.newLabel("for_end")
+
+	// Guardar contexto del bucle actual
+	prevStart := g.currentLoopStart
+	prevEnd := g.currentLoopEnd
+	g.currentLoopStart = startLabel
+	g.currentLoopEnd = endLabel
+
+	g.Emit("%s:", startLabel)
+
+	// Generar código para la condición
+	node.Condition.Accept(g)
+
+	// Saltar al final si la condición es falsa
+	g.Emit("\tcbz x0, %s", endLabel)
+
+	// Generar cuerpo del bucle
+	for _, stmt := range node.Body {
+		stmt.Accept(g)
+	}
+
+	// Volver al inicio
+	g.Emit("\tb %s", startLabel)
+
+	// Etiqueta de fin
+	g.Emit("%s:", endLabel)
+
+	// Restaurar contexto del bucle
+	g.currentLoopStart = prevStart
+	g.currentLoopEnd = prevEnd
+
 	return nil
 }
-
 func (g *ARM64Generator) VisitForClassic(node *ast.ForClassic) interface{} {
 	g.Emit("\t// TODO: Classic for loop")
 	return nil

@@ -491,7 +491,7 @@ func (ide *IDE) showCSTReport() {
 
 // Nuevo método para compilar a ARM64
 func (ide *IDE) compileToARM64() {
-	ide.outputTabs.SelectTab(ide.outputTabs.Items[1]) // Seleccionar tab de assembly
+	ide.outputTabs.SelectTab(ide.outputTabs.Items[1])
 	ide.assemblyOutput.SetText("Compilando a ARM64...\n\n")
 
 	astProgram, err := ide.buildAST()
@@ -500,27 +500,33 @@ func (ide *IDE) compileToARM64() {
 		return
 	}
 
-	// Generar código ARM64
+	// Debug: imprimir AST
+	fmt.Printf("AST para compilación:\n%+v\n", astProgram)
+
 	generator := arm64.NewARM64Generator()
 	assembly, err := generator.Generate(astProgram)
 	if err != nil {
-		ide.assemblyOutput.SetText(fmt.Sprintf("Error generando código ARM64: %v\n", err))
+		errorMsg := fmt.Sprintf("Error generando código ARM64: %v\n", err)
+		ide.assemblyOutput.SetText(errorMsg)
+		fmt.Print(errorMsg) // Debug en consola
 		return
 	}
 
-	// Mostrar el código ensamblador generado
+	// Mostrar en el IDE y en consola
 	ide.assemblyOutput.SetText(assembly)
+	fmt.Println("Código ARM64 generado con éxito:\n", assembly)
 
-	// Guardar el archivo .s si hay un archivo actual
 	if ide.currentFile != "" {
 		asmFile := strings.TrimSuffix(ide.currentFile, filepath.Ext(ide.currentFile)) + ".s"
 		err = ioutil.WriteFile(asmFile, []byte(assembly), 0644)
 		if err != nil {
-			ide.assemblyOutput.SetText(ide.assemblyOutput.Text +
-				fmt.Sprintf("\n\nError guardando archivo: %v", err))
+			msg := fmt.Sprintf("\n\nError guardando archivo: %v", err)
+			ide.assemblyOutput.SetText(ide.assemblyOutput.Text + msg)
+			fmt.Print(msg)
 		} else {
-			ide.assemblyOutput.SetText(ide.assemblyOutput.Text +
-				fmt.Sprintf("\n\n✅ Archivo guardado como: %s", asmFile))
+			msg := fmt.Sprintf("\n\n✅ Archivo guardado como: %s", asmFile)
+			ide.assemblyOutput.SetText(ide.assemblyOutput.Text + msg)
+			fmt.Print(msg)
 		}
 	}
 }

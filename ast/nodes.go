@@ -497,8 +497,19 @@ func (f *Fallthrough) GetColumn() int               { return f.Column }
 //     Column int
 // }
 
-// type Continue struct {
-//     Label  string // Puede ser vacío
-//     Line   int
-//     Column int
-// }
+//	type Continue struct {
+//	    Label  string // Puede ser vacío
+//	    Line   int
+//	    Column int
+//	}
+func (f *FuncDecl) GetLocalVars() []*VarDecl {
+	var locals []*VarDecl
+
+	for _, stmt := range f.Body {
+		if vd, ok := stmt.(*VarDecl); ok {
+			locals = append(locals, vd)
+		}
+	}
+
+	return locals
+}
