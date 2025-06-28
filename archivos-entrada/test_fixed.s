@@ -1,80 +1,90 @@
 .data
-.align 4
-print_fmt: .asciz "%d"
-print_str_fmt: .asciz "%s"
-print_space_fmt: .asciz "%c"
+print_fmt: .asciz "%s"
 .Lstr_0:
-	.asciz "For como while simple"
-.Lstr_3:
-	.asciz "i ="
+	.asciz "\n==== Switch con break explícito ===="
+.Lstr_6:
+	.asciz "No se debería imprimir"
+.Lstr_7:
+	.asciz "Caso 2 - Se ejecuta este y debe detenerse"
+.Lstr_8:
+	.asciz "No debería ejecutarse si el break funciona"
 
 .text
-.align 4
 .global main
 
+.global main
 main:
-	stp x29, x30, [sp, #-64]!
+	stp x29, x30, [sp, #-16]!
 	mov x29, sp
-	stp x19, x20, [sp, #16]
-	str x21, [sp, #32]
-	stp x19, x20, [sp, #-16]!
+	// Print statement
 	adr x0, .Lstr_0
-	adrp x19, print_str_fmt
-	add x19, x19, :lo12:print_str_fmt
-	mov x20, x0
-	mov x0, x19
-	mov x1, x20
+	// Print integer value
+	mov x1, x0
+	adr x0, print_fmt
 	bl printf
+	// Print newline
 	mov x0, #10
 	bl putchar
-	ldp x19, x20, [sp], #16
-	mov x0, #0
-	str x0, [x29, #40] // Store i
-	mov x0, #0
-	str x0, [x29, #48] // Store suma
-.Lfor_start_1:
-	ldr x0, [x29, #40] // Load i
-	mov x19, x0 // Guardar operando izquierdo
-	mov x0, #5
-	mov x20, x0 // Guardar operando derecho
-	cmp x19, x20
-	cset x0, lt
-	cbz x0, .Lfor_end_2
-	stp x19, x20, [sp, #-16]!
-	adr x0, .Lstr_3
-	adrp x19, print_str_fmt
-	add x19, x19, :lo12:print_str_fmt
-	mov x20, x0
-	mov x0, x19
-	mov x1, x20
-	mov x2, #' '
-	bl printf
-	ldr x0, [x29, #40] // Load i
-	adrp x19, print_fmt
-	add x19, x19, :lo12:print_fmt
-	mov x20, x0
-	mov x0, x19
-	mov x1, x20
-	bl printf
-	mov x0, #10
-	bl putchar
-	ldp x19, x20, [sp], #16
-	ldr x0, [x29, #48] // Load suma
-	mov x19, x0 // Guardar operando izquierdo
-	ldr x0, [x29, #40] // Load i
-	mov x20, x0 // Guardar operando derecho
-	add x0, x19, x20
-	str x0, [x29, #48] // Store to suma
-	ldr x0, [x29, #40] // Load i
-	mov x19, x0 // Guardar operando izquierdo
+	// Variable declaration: numeroBreak
+	mov x0, #2
+	// Store variable numeroBreak at offset -8
+	str x0, [x29, #-8]
+	// Switch statement
+	// Load variable numeroBreak from offset -8
+	ldr x0, [x29, #-8]
+	mov x9, x0 // Guardar valor del switch en x9
 	mov x0, #1
-	mov x20, x0 // Guardar operando derecho
-	add x0, x19, x20
-	str x0, [x29, #40] // Store to i
-	b .Lfor_start_1
-.Lfor_end_2:
-	mov x0, #0
-	ldr x21, [sp, #32]
-	ldp x19, x20, [sp, #16]
-	ldp x29, x30, [sp], #64
+	cmp x9, x0 // Comparar con valor del case
+	beq .Lcase_0_3 // Saltar si igual
+	mov x0, #2
+	cmp x9, x0 // Comparar con valor del case
+	beq .Lcase_1_4 // Saltar si igual
+	mov x0, #3
+	cmp x9, x0 // Comparar con valor del case
+	beq .Lcase_2_5 // Saltar si igual
+	b .Lswitch_end_1
+.Lcase_0_3:
+	// Print statement
+	adr x0, .Lstr_6
+	// Print integer value
+	mov x1, x0
+	adr x0, print_fmt
+	bl printf
+	// Print newline
+	mov x0, #10
+	bl putchar
+	b .Lswitch_end_1
+.Lcase_1_4:
+	// Print statement
+	adr x0, .Lstr_7
+	// Print integer value
+	mov x1, x0
+	adr x0, print_fmt
+	bl printf
+	// Print newline
+	mov x0, #10
+	bl putchar
+	// Print statement
+	adr x0, .Lstr_8
+	// Print integer value
+	mov x1, x0
+	adr x0, print_fmt
+	bl printf
+	// Print newline
+	mov x0, #10
+	bl putchar
+	b .Lswitch_end_1
+.Lcase_2_5:
+	// Print statement
+	adr x0, .Lstr_6
+	// Print integer value
+	mov x1, x0
+	adr x0, print_fmt
+	bl printf
+	// Print newline
+	mov x0, #10
+	bl putchar
+	b .Lswitch_end_1
+.Lswitch_end_1:
+	ldp x29, x30, [sp], #16
 	ret

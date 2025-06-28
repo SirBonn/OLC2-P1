@@ -19,6 +19,13 @@ type VariableInfo struct {
 	InRegister bool     // si está actualmente en un registro
 }
 
+type ControlFlowContext struct {
+	Type       string // "switch", "while", "for"
+	StartLabel string
+	EndLabel   string
+	BreakLabel string
+}
+
 // getSize retorna el tamaño en bytes según el tipo
 func (vi *VariableInfo) getSize() int {
 	switch vi.Type {
@@ -49,6 +56,7 @@ type ARM64Generator struct {
 	symbolTable        map[string]*VariableInfo   // tabla de símbolos
 	scopeStack         []map[string]*VariableInfo // stack de scopes
 	currentStackOffset int                        // offset actual del stack frame
+	controlFlowStack   []*ControlFlowContext
 }
 
 // NewARM64Generator crea un nuevo generador ARM64
@@ -94,44 +102,34 @@ func (g *ARM64Generator) Generate(node ast.Node) (string, error) {
 func (g *ARM64Generator) buildFinalOutput() string {
 	var output strings.Builder
 
-	// Sección de datos (strings, constantes, etc.)
-	if len(g.dataSection) > 0 || len(g.stringLiterals) > 0 {
-		output.WriteString(".data\n")
+	// Sección de datos
+	output.WriteString(".data\n")
+	output.WriteString("print_fmt: .asciz \"%s\"\n") // Añadir formato para printf
 
-		// Agregar string literals
-		for str, label := range g.stringLiterals {
-			output.WriteString(fmt.Sprintf("%s:\n", label))
-			output.WriteString(fmt.Sprintf("\t.asciz \"%s\"\n", escapeString(str)))
-		}
-
-		// Agregar otras entradas de la sección de datos
-		for _, data := range g.dataSection {
-			output.WriteString(data + "\n")
-		}
-
-		output.WriteString("\n")
+	// Agregar string literals
+	for str, label := range g.stringLiterals {
+		output.WriteString(fmt.Sprintf("%s:\n", label))
+		output.WriteString(fmt.Sprintf("\t.asciz \"%s\"\n", escapeString(str)))
 	}
+	output.WriteString("\n")
 
-	// Sección de texto (código)
+	// Sección de texto
 	output.WriteString(".text\n")
-	output.WriteString(".global _start\n\n")
 
-	// Si no hay función main, crear un _start mínimo
-	if !g.hasMainFunction() {
+	// Si hay función main, no generar _start (dejamos que crt0 lo maneje)
+	if g.hasMainFunction() {
+		output.WriteString(".global main\n\n")
+	} else {
+		output.WriteString(".global _start\n\n")
 		output.WriteString("_start:\n")
-		output.WriteString("\t// No main function found, executing top-level code\n")
+		output.WriteString("\tbl main\n")
+		output.WriteString("\tmov x0, #0\n")
+		output.WriteString("\tmov x16, #1\n")
+		output.WriteString("\tsvc #0x80\n\n")
 	}
 
 	// Agregar el código generado
 	output.WriteString(g.GetOutput())
-
-	// Si no terminamos con exit, agregarlo
-	if !strings.Contains(g.GetOutput(), "svc #0x80") {
-		output.WriteString("\n\t// Exit program\n")
-		output.WriteString("\tmov x0, #0\n")
-		output.WriteString("\tmov x16, #1\n")
-		output.WriteString("\tsvc #0x80\n")
-	}
 
 	return output.String()
 }
@@ -571,6 +569,10 @@ func (g *ARM64Generator) VisitWhileStmt(node *ast.WhileStmt) interface{} {
 	startLabel := g.newLabel("while_start")
 	endLabel := g.newLabel("while_end")
 
+	// Registrar contexto
+	g.pushControlFlow("while", startLabel, endLabel)
+	defer g.popControlFlow()
+
 	g.Emit("\t// While loop")
 	g.Emit("%s:", startLabel)
 
@@ -598,28 +600,27 @@ func (g *ARM64Generator) VisitWhileStmt(node *ast.WhileStmt) interface{} {
 func (g *ARM64Generator) VisitFuncDecl(node *ast.FuncDecl) interface{} {
 	g.currentFunction = node.Name
 	g.stackOffset = 0
-	g.currentStackOffset = 0 // Reset stack offset para esta función
+	g.currentStackOffset = 0
 
-	// Si es main, también crear _start
+	// Solo generar .global para main
 	if node.Name == "main" {
-		g.Emit("_start:")
-		g.Emit("\tbl main")
-		g.Emit("\t// Exit after main")
-		g.Emit("\tmov x0, #0")
-		g.Emit("\tmov x16, #1")
-		g.Emit("\tsvc #0x80")
-		g.Emit("")
+		g.Emit(".global %s", node.Name)
 	}
-
-	// Etiqueta de la función
 	g.Emit("%s:", node.Name)
 
 	// Prólogo
-	g.Emit("\t// Function prologue")
 	g.Emit("\tstp x29, x30, [sp, #-16]!")
 	g.Emit("\tmov x29, sp")
 
-	// TODO: Configurar parámetros
+	// Calcular espacio necesario para variables locales
+	varSize := -g.currentStackOffset
+	if varSize > 0 {
+		// Alinear a 16 bytes
+		if varSize%16 != 0 {
+			varSize += 16 - (varSize % 16)
+		}
+		g.Emit("\tsub sp, sp, #%d // Espacio para variables locales", varSize)
+	}
 
 	// Crear scope para la función
 	g.enterScope()
@@ -629,24 +630,19 @@ func (g *ARM64Generator) VisitFuncDecl(node *ast.FuncDecl) interface{} {
 		stmt.Accept(g)
 	}
 
-	// Reservar espacio para variables locales si es necesario
-	if g.currentStackOffset < 0 {
-		// Insertar código de asignación de stack después del prólogo
-		// (esto es una simplificación, idealmente se haría antes)
-		g.allocateStackSpace()
-	}
-
 	// Salir del scope
 	g.exitScope()
 
 	// Epílogo (si no hay return explícito)
-	g.Emit("\t// Function epilogue")
-	g.Emit("\tldp x29, x30, [sp], #16")
-	g.Emit("\tret")
-	g.Emit("")
+	if !strings.Contains(g.GetOutput(), "ret") {
+		if varSize > 0 {
+			g.Emit("\tadd sp, sp, #%d", varSize)
+		}
+		g.Emit("\tldp x29, x30, [sp], #16")
+		g.Emit("\tret")
+	}
 
 	g.currentFunction = ""
-
 	return nil
 }
 
@@ -694,7 +690,15 @@ func (g *ARM64Generator) VisitFuncCall(node *ast.FuncCall) interface{} {
 }
 
 func (g *ARM64Generator) VisitBreak(node *ast.Break) interface{} {
-	g.Emit("\t// TODO: Break statement")
+	g.Emit("\t// Break statement")
+
+	ctx := g.currentControlFlow()
+	if ctx == nil {
+		g.AddError(fmt.Errorf("break statement outside of loop or switch"))
+		return nil
+	}
+
+	g.Emit("\tb %s // Break to end of %s", ctx.BreakLabel, ctx.Type)
 	return nil
 }
 
@@ -756,10 +760,65 @@ func (g *ARM64Generator) VisitForRange(node *ast.ForRange) interface{} {
 }
 
 func (g *ARM64Generator) VisitSwitchStmt(node *ast.SwitchStmt) interface{} {
-	g.Emit("\t// TODO: Switch statement")
+	g.Emit("\t// Switch statement")
+
+	// Evaluar la expresión del switch si existe
+	if node.Expression != nil {
+		node.Expression.Accept(g)
+		g.Emit("\tmov x9, x0 // Guardar valor del switch en x9")
+	} else {
+		g.Emit("\tmov x9, xzr // Switch sin expresión")
+	}
+
+	endLabel := g.newLabel("switch_end")
+	defaultLabel := g.newLabel("switch_default")
+	caseLabels := make([]string, len(node.Cases))
+
+	// Registrar contexto para manejar breaks
+	g.pushControlFlow("switch", "", endLabel)
+	defer g.popControlFlow()
+
+	// Generar comparaciones para cada caso
+	for i, clause := range node.Cases {
+		caseLabels[i] = g.newLabel(fmt.Sprintf("case_%d", i))
+
+		for _, valueExpr := range clause.Values {
+			valueExpr.Accept(g)
+			g.Emit("\tcmp x9, x0 // Comparar con valor del case")
+			g.Emit("\tbeq %s // Saltar si igual", caseLabels[i])
+		}
+	}
+
+	// Saltar al default o al final si no hay match
+	if node.Default != nil {
+		g.Emit("\tb %s", defaultLabel)
+	} else {
+		g.Emit("\tb %s", endLabel)
+	}
+
+	// Generar código para cada caso
+	for i, clause := range node.Cases {
+		g.Emit("%s:", caseLabels[i])
+
+		for _, stmt := range clause.Statements {
+			stmt.Accept(g)
+		}
+
+		// Saltar al final (a menos que haya fallthrough)
+		g.Emit("\tb %s", endLabel)
+	}
+
+	// Generar código para el default si existe
+	if node.Default != nil {
+		g.Emit("%s:", defaultLabel)
+		for _, stmt := range node.Default.Statements {
+			stmt.Accept(g)
+		}
+	}
+
+	g.Emit("%s:", endLabel)
 	return nil
 }
-
 func (g *ARM64Generator) VisitCaseClause(node *ast.CaseClause) interface{} {
 	g.Emit("\t// TODO: Case clause")
 	return nil
@@ -982,4 +1041,28 @@ func escapeString(s string) string {
 	s = strings.ReplaceAll(s, "\r", "\\r")
 	s = strings.ReplaceAll(s, "\t", "\\t")
 	return s
+}
+
+// switch:
+func (g *ARM64Generator) pushControlFlow(ctxType, startLabel, endLabel string) {
+	ctx := &ControlFlowContext{
+		Type:       ctxType,
+		StartLabel: startLabel,
+		EndLabel:   endLabel,
+		BreakLabel: endLabel,
+	}
+	g.controlFlowStack = append(g.controlFlowStack, ctx)
+}
+
+func (g *ARM64Generator) popControlFlow() {
+	if len(g.controlFlowStack) > 0 {
+		g.controlFlowStack = g.controlFlowStack[:len(g.controlFlowStack)-1]
+	}
+}
+
+func (g *ARM64Generator) currentControlFlow() *ControlFlowContext {
+	if len(g.controlFlowStack) == 0 {
+		return nil
+	}
+	return g.controlFlowStack[len(g.controlFlowStack)-1]
 }
