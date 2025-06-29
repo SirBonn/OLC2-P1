@@ -103,16 +103,29 @@ func (g *ARM64Generator) Generate(node ast.Node) (string, error) {
 func (g *ARM64Generator) buildFinalOutput() string {
 	var output strings.Builder
 
-	// Sección de datos mejorada
+	// Sección de datos - SIEMPRE incluir todas las etiquetas necesarias
 	output.WriteString(".data\n")
-	output.WriteString("print_fmt: .asciz \"%ld\\n\"\n")    // Formato para números (long)
-	output.WriteString("print_fmt_no_nl: .asciz \"%ld\"\n") // Sin newline
+
+	// Formatos básicos que siempre necesitamos
+	output.WriteString("print_int_fmt:\n\t.asciz \"%ld\"\n")
+	output.WriteString("space_str:\n\t.asciz \" \"\n")
+	output.WriteString("newline_str:\n\t.asciz \"\\n\"\n")
+
+	// Strings para booleanos (siempre incluir por si se necesitan)
+	output.WriteString("bool_true_str:\n\t.asciz \"true\"\n")
+	output.WriteString("bool_false_str:\n\t.asciz \"false\"\n")
+
+	// Agregar entradas adicionales de dataSection
+	for _, data := range g.dataSection {
+		output.WriteString(data + "\n")
+	}
 
 	// Agregar string literals
 	for str, label := range g.stringLiterals {
 		output.WriteString(fmt.Sprintf("%s:\n", label))
 		output.WriteString(fmt.Sprintf("\t.asciz \"%s\"\n", escapeString(str)))
 	}
+
 	output.WriteString("\n")
 
 	// Sección de texto
@@ -130,7 +143,6 @@ func (g *ARM64Generator) hasMainFunction() bool {
 	return strings.Contains(g.GetOutput(), "main:")
 }
 
-// reset limpia el estado del generador
 func (g *ARM64Generator) reset() {
 	g.BaseGenerator.Reset()
 	g.currentFunction = ""
@@ -144,6 +156,7 @@ func (g *ARM64Generator) reset() {
 	g.symbolTable = make(map[string]*VariableInfo)
 	g.scopeStack = make([]map[string]*VariableInfo, 0)
 	g.currentStackOffset = 0
+	// Eliminar hasBooleanStrings
 }
 
 // newLabel genera una nueva etiqueta única
@@ -443,47 +456,46 @@ func (g *ARM64Generator) VisitPrintStmt(node *ast.PrintStmt) interface{} {
 	g.Emit("\t// Print statement")
 
 	for i, arg := range node.Arguments {
+		// Evaluar el argumento
 		arg.Accept(g)
 
+		// Determinar cómo imprimir basado en el tipo del argumento
 		argType := g.determineExpressionType(arg)
 
 		g.Emit("\t// Print %s value", argType)
 
 		switch argType {
 		case "string":
-			if _, isLiteral := arg.(*ast.Literal); isLiteral {
-				g.Emit("\tbl puts")
-			} else {
-				g.Emit("\tbl puts")
-			}
+			// Para strings (literales o variables), usar puts
+			g.Emit("\tbl puts")
 		case "bool":
-			trueLabel := g.newLabel("true_str")
-			_ = trueLabel
-			falseLabel := g.newLabel("false_str")
+			// Para booleanos, imprimir "true" o "false"
+			falseLabel := g.newLabel("bool_false")
 			endLabel := g.newLabel("bool_end")
-
-			g.addBooleanStrings()
 
 			g.Emit("\tcmp x0, #0")
 			g.Emit("\tbeq %s", falseLabel)
 
 			// True case
 			g.Emit("\tadr x0, bool_true_str")
+			g.Emit("\tbl puts")
 			g.Emit("\tb %s", endLabel)
 
 			// False case
 			g.Emit("%s:", falseLabel)
 			g.Emit("\tadr x0, bool_false_str")
+			g.Emit("\tbl puts")
 
 			g.Emit("%s:", endLabel)
-			g.Emit("\tbl puts")
 		case "int":
 		default:
+			// Para enteros y tipos desconocidos
 			g.Emit("\tmov x1, x0")
 			g.Emit("\tadr x0, print_int_fmt")
 			g.Emit("\tbl printf")
 		}
 
+		// Agregar espacio entre argumentos (excepto el último)
 		if i < len(node.Arguments)-1 {
 			g.Emit("\t// Print space")
 			g.Emit("\tadr x0, space_str")
@@ -491,16 +503,15 @@ func (g *ARM64Generator) VisitPrintStmt(node *ast.PrintStmt) interface{} {
 		}
 	}
 
+	// Para println, agregar newline solo si el último argumento no fue string
 	if node.NewLine {
-		needsNewline := true
-		if len(node.Arguments) == 1 {
-			argType := g.determineExpressionType(node.Arguments[0])
-			if argType == "string" {
-				needsNewline = false
-			}
+		lastArgType := "int"
+		if len(node.Arguments) > 0 {
+			lastArgType = g.determineExpressionType(node.Arguments[len(node.Arguments)-1])
 		}
 
-		if needsNewline {
+		// puts ya incluye newline, pero printf no
+		if lastArgType != "string" && lastArgType != "bool" {
 			g.Emit("\t// Print newline")
 			g.Emit("\tadr x0, newline_str")
 			g.Emit("\tbl printf")
