@@ -42,7 +42,6 @@ func (vi *VariableInfo) getSize() int {
 	}
 }
 
-// ARM64Generator genera código ensamblador ARM64
 type ARM64Generator struct {
 	*codegen.BaseGenerator
 	currentFunction string
@@ -57,6 +56,9 @@ type ARM64Generator struct {
 	scopeStack         []map[string]*VariableInfo // stack de scopes
 	currentStackOffset int                        // offset actual del stack frame
 	controlFlowStack   []*ControlFlowContext
+
+	// Flags para strings especiales
+	hasBooleanStrings bool
 }
 
 // NewARM64Generator crea un nuevo generador ARM64
@@ -443,53 +445,81 @@ func (g *ARM64Generator) VisitPrintStmt(node *ast.PrintStmt) interface{} {
 	for i, arg := range node.Arguments {
 		arg.Accept(g)
 
-		isStringLiteral := false
-		if strLit, ok := arg.(*ast.Literal); ok && strLit.Type == "string" {
-			isStringLiteral = true
-		}
+		argType := g.determineExpressionType(arg)
 
-		if isStringLiteral {
-			g.Emit("\t// Print string value")
-			g.Emit("\tbl puts") // puts maneja strings directamente
-		} else {
-			g.Emit("\t// Print integer value")
-			g.Emit("\tmov x1, x0")        // valor a imprimir
-			g.Emit("\tadr x0, print_fmt") // formato
-			g.Emit("\tbl printf")         // llamar a printf
+		g.Emit("\t// Print %s value", argType)
+
+		switch argType {
+		case "string":
+			if _, isLiteral := arg.(*ast.Literal); isLiteral {
+				g.Emit("\tbl puts")
+			} else {
+				g.Emit("\tbl puts")
+			}
+		case "bool":
+			trueLabel := g.newLabel("true_str")
+			_ = trueLabel
+			falseLabel := g.newLabel("false_str")
+			endLabel := g.newLabel("bool_end")
+
+			g.addBooleanStrings()
+
+			g.Emit("\tcmp x0, #0")
+			g.Emit("\tbeq %s", falseLabel)
+
+			// True case
+			g.Emit("\tadr x0, bool_true_str")
+			g.Emit("\tb %s", endLabel)
+
+			// False case
+			g.Emit("%s:", falseLabel)
+			g.Emit("\tadr x0, bool_false_str")
+
+			g.Emit("%s:", endLabel)
+			g.Emit("\tbl puts")
+		case "int":
+		default:
+			g.Emit("\tmov x1, x0")
+			g.Emit("\tadr x0, print_int_fmt")
+			g.Emit("\tbl printf")
 		}
 
 		if i < len(node.Arguments)-1 {
 			g.Emit("\t// Print space")
-			g.Emit("\tmov x0, #32") // ASCII space
-			g.Emit("\tbl putchar")
+			g.Emit("\tadr x0, space_str")
+			g.Emit("\tbl printf")
 		}
 	}
 
 	if node.NewLine {
 		needsNewline := true
 		if len(node.Arguments) == 1 {
-			if strLit, ok := node.Arguments[0].(*ast.Literal); ok && strLit.Type == "string" {
-				needsNewline = false // puts ya agrega newline
+			argType := g.determineExpressionType(node.Arguments[0])
+			if argType == "string" {
+				needsNewline = false
 			}
 		}
 
 		if needsNewline {
 			g.Emit("\t// Print newline")
-			g.Emit("\tmov x0, #10") // ASCII newline
-			g.Emit("\tbl putchar")
+			g.Emit("\tadr x0, newline_str")
+			g.Emit("\tbl printf")
 		}
 	}
 
 	return nil
 }
 
-// VisitVarDecl genera código para declaraciones de variables
 func (g *ARM64Generator) VisitVarDecl(node *ast.VarDecl) interface{} {
 	g.Emit("\t// Variable declaration: %s", node.Name)
 
 	varType := "int" // tipo por defecto
 	if node.Type != "" {
 		varType = node.Type
+	} else if node.Value != nil {
+		if literal, ok := node.Value.(*ast.Literal); ok {
+			varType = literal.Type
+		}
 	}
 
 	varInfo := g.addVariable(node.Name, varType)
@@ -509,19 +539,17 @@ func (g *ARM64Generator) VisitVarDecl(node *ast.VarDecl) interface{} {
 		}
 	}
 
+	// Almacenar en el stack
 	g.storeVariable(varInfo)
 
 	return nil
 }
 
-// VisitAssignment genera código para asignaciones
 func (g *ARM64Generator) VisitAssignment(node *ast.Assignment) interface{} {
 	g.Emit("\t// Assignment")
 
-	// Evaluar el valor
 	node.Value.Accept(g)
 
-	// Obtener el target (debe ser un identificador)
 	if id, ok := node.Target.(*ast.Identifier); ok {
 		varInfo := g.findVariable(id.Name)
 		if varInfo == nil {
@@ -529,7 +557,6 @@ func (g *ARM64Generator) VisitAssignment(node *ast.Assignment) interface{} {
 			return nil
 		}
 
-		// Almacenar el valor
 		g.storeVariable(varInfo)
 	} else {
 		g.AddError(fmt.Errorf("assignment target must be an identifier"))
@@ -538,14 +565,12 @@ func (g *ARM64Generator) VisitAssignment(node *ast.Assignment) interface{} {
 	return nil
 }
 
-// VisitIfStmt genera código para declaraciones if
 func (g *ARM64Generator) VisitIfStmt(node *ast.IfStmt) interface{} {
 	elseLabel := g.newLabel("else")
 	endLabel := g.newLabel("endif")
 
 	g.Emit("\t// If statement")
 
-	// Evaluar condición
 	node.Condition.Accept(g)
 
 	// Saltar a else si es falso
@@ -1451,4 +1476,46 @@ func (g *ARM64Generator) currentControlFlow() *ControlFlowContext {
 		return nil
 	}
 	return g.controlFlowStack[len(g.controlFlowStack)-1]
+}
+
+func (g *ARM64Generator) determineExpressionType(expr ast.Expression) string {
+	switch e := expr.(type) {
+	case *ast.Literal:
+		return e.Type
+	case *ast.Identifier:
+		// Buscar el tipo en la tabla de símbolos
+		if varInfo := g.findVariable(e.Name); varInfo != nil {
+			return varInfo.Type
+		}
+		return "int" // fallback
+	case *ast.BinaryExpr:
+		// Para expresiones binarias, determinar tipo basado en operador
+		switch e.Operator {
+		case "==", "!=", "<", "<=", ">", ">=", "&&", "||":
+			return "bool"
+		default:
+			// Para +, -, *, /, % asumir int por ahora
+			return "int"
+		}
+	case *ast.UnaryExpr:
+		if e.Operator == "!" {
+			return "bool"
+		}
+		return g.determineExpressionType(e.Operand)
+	case *ast.FuncCall:
+		// Por ahora, asumir que las funciones retornan int
+		// TODO: Implementar tabla de tipos de funciones
+		return "int"
+	default:
+		return "int" // fallback
+	}
+}
+
+func (g *ARM64Generator) addBooleanStrings() {
+	// Solo agregar una vez
+	if !g.hasBooleanStrings {
+		g.dataSection = append(g.dataSection, "bool_true_str: .asciz \"true\"")
+		g.dataSection = append(g.dataSection, "bool_false_str: .asciz \"false\"")
+		g.hasBooleanStrings = true
+	}
 }
