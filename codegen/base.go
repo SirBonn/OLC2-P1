@@ -1,3 +1,4 @@
+// base.go
 package codegen
 
 import (

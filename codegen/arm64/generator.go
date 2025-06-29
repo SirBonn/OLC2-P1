@@ -103,15 +103,16 @@ func (g *ARM64Generator) Generate(node ast.Node) (string, error) {
 func (g *ARM64Generator) buildFinalOutput() string {
 	var output strings.Builder
 
-	// Sección de datos - SIEMPRE incluir todas las etiquetas necesarias
+	// Sección de datos - Incluir TODOS los formatos necesarios
 	output.WriteString(".data\n")
 
 	// Formatos básicos que siempre necesitamos
 	output.WriteString("print_int_fmt:\n\t.asciz \"%ld\"\n")
+	output.WriteString("string_fmt:\n\t.asciz \"%s\"\n") // NUEVO: formato para strings
 	output.WriteString("space_str:\n\t.asciz \" \"\n")
 	output.WriteString("newline_str:\n\t.asciz \"\\n\"\n")
 
-	// Strings para booleanos (siempre incluir por si se necesitan)
+	// Strings para booleanos
 	output.WriteString("bool_true_str:\n\t.asciz \"true\"\n")
 	output.WriteString("bool_false_str:\n\t.asciz \"false\"\n")
 
@@ -407,7 +408,6 @@ func (g *ARM64Generator) VisitUnaryExpr(node *ast.UnaryExpr) interface{} {
 	return nil
 }
 
-// VisitLiteral genera código para literales
 func (g *ARM64Generator) VisitLiteral(node *ast.Literal) interface{} {
 	switch node.Type {
 	case "int":
@@ -437,9 +437,7 @@ func (g *ARM64Generator) VisitLiteral(node *ast.Literal) interface{} {
 	return nil
 }
 
-// VisitIdentifier genera código para identificadores
 func (g *ARM64Generator) VisitIdentifier(node *ast.Identifier) interface{} {
-	// Buscar la variable en la tabla de símbolos
 	varInfo := g.findVariable(node.Name)
 	if varInfo == nil {
 		g.AddError(fmt.Errorf("undefined variable: %s", node.Name))
@@ -447,15 +445,16 @@ func (g *ARM64Generator) VisitIdentifier(node *ast.Identifier) interface{} {
 		return nil
 	}
 
-	// Cargar la variable
 	g.loadVariable(varInfo)
 	return nil
 }
 
 func (g *ARM64Generator) VisitPrintStmt(node *ast.PrintStmt) interface{} {
-	g.Emit("\t// Print statement")
+	g.Emit("\t// Print statement with %d arguments", len(node.Arguments))
 
 	for i, arg := range node.Arguments {
+		g.Emit("\t// Argument %d", i+1)
+
 		// Evaluar el argumento
 		arg.Accept(g)
 
@@ -466,8 +465,11 @@ func (g *ARM64Generator) VisitPrintStmt(node *ast.PrintStmt) interface{} {
 
 		switch argType {
 		case "string":
-			// Para strings (literales o variables), usar puts
-			g.Emit("\tbl puts")
+			// Para strings, NO usar puts porque agrega newline automático
+			// Usar printf con %s en su lugar
+			g.Emit("\tmov x1, x0")
+			g.Emit("\tadr x0, string_fmt")
+			g.Emit("\tbl printf")
 		case "bool":
 			// Para booleanos, imprimir "true" o "false"
 			falseLabel := g.newLabel("bool_false")
@@ -478,18 +480,26 @@ func (g *ARM64Generator) VisitPrintStmt(node *ast.PrintStmt) interface{} {
 
 			// True case
 			g.Emit("\tadr x0, bool_true_str")
-			g.Emit("\tbl puts")
+			g.Emit("\tmov x1, x0")
+			g.Emit("\tadr x0, string_fmt")
+			g.Emit("\tbl printf")
 			g.Emit("\tb %s", endLabel)
 
 			// False case
 			g.Emit("%s:", falseLabel)
 			g.Emit("\tadr x0, bool_false_str")
-			g.Emit("\tbl puts")
+			g.Emit("\tmov x1, x0")
+			g.Emit("\tadr x0, string_fmt")
+			g.Emit("\tbl printf")
 
 			g.Emit("%s:", endLabel)
 		case "int":
+			// Para enteros - AGREGAR el código que faltaba
+			g.Emit("\tmov x1, x0")
+			g.Emit("\tadr x0, print_int_fmt")
+			g.Emit("\tbl printf")
 		default:
-			// Para enteros y tipos desconocidos
+			// Para tipos desconocidos, asumir entero
 			g.Emit("\tmov x1, x0")
 			g.Emit("\tadr x0, print_int_fmt")
 			g.Emit("\tbl printf")
@@ -503,19 +513,11 @@ func (g *ARM64Generator) VisitPrintStmt(node *ast.PrintStmt) interface{} {
 		}
 	}
 
-	// Para println, agregar newline solo si el último argumento no fue string
+	// Para println, siempre agregar newline al final
 	if node.NewLine {
-		lastArgType := "int"
-		if len(node.Arguments) > 0 {
-			lastArgType = g.determineExpressionType(node.Arguments[len(node.Arguments)-1])
-		}
-
-		// puts ya incluye newline, pero printf no
-		if lastArgType != "string" && lastArgType != "bool" {
-			g.Emit("\t// Print newline")
-			g.Emit("\tadr x0, newline_str")
-			g.Emit("\tbl printf")
-		}
+		g.Emit("\t// Print final newline")
+		g.Emit("\tadr x0, newline_str")
+		g.Emit("\tbl printf")
 	}
 
 	return nil
@@ -663,6 +665,13 @@ func (g *ARM64Generator) VisitFuncDecl(node *ast.FuncDecl) interface{} {
 	g.Emit("\tstp x29, x30, [sp, #-16]!")
 	g.Emit("\tmov x29, sp")
 
+	// RESERVAR ESPACIO FIJO para variables locales (simplificación)
+	// En main típicamente necesitamos espacio para varias variables
+	if node.Name == "main" {
+		g.Emit("\t// Reserve stack space for variables")
+		g.Emit("\tsub sp, sp, #64") // Espacio fijo de 64 bytes
+	}
+
 	// Crear scope para la función
 	g.enterScope()
 
@@ -677,22 +686,9 @@ func (g *ARM64Generator) VisitFuncDecl(node *ast.FuncDecl) interface{} {
 				// Parámetros en registros x0-x7
 				g.Emit("\t// Parameter %s from x%d", param.Name, i)
 				g.Emit("\tstr x%d, [x29, #%d]", i, paramVar.Offset)
-			} else {
-				// Parámetros adicionales desde caller stack
-				g.Emit("\t// Parameter %s from caller stack", param.Name)
-				g.Emit("\tldr x0, [x29, #%d]", 16+(i-8)*8)
-				g.Emit("\tstr x0, [x29, #%d]", paramVar.Offset)
 			}
 		}
 	}
-
-	// Reservar espacio para variables locales después de procesar parámetros
-	// pero antes del cuerpo de la función
-	stackSpaceNeeded := false
-	savedPosition := len(strings.Split(g.GetOutput(), "\n"))
-
-	_ = savedPosition    // Guardar posición para insertar stack space
-	_ = stackSpaceNeeded // Variable para saber si necesitamos reservar espacio
 
 	// Generar código del cuerpo
 	hasExplicitReturn := false
@@ -703,20 +699,6 @@ func (g *ARM64Generator) VisitFuncDecl(node *ast.FuncDecl) interface{} {
 		}
 	}
 
-	// Calcular y reservar espacio para variables locales
-	if g.currentStackOffset < 0 {
-		stackSize := -g.currentStackOffset
-		// Alinear a 16 bytes
-		if stackSize%16 != 0 {
-			stackSize += 16 - (stackSize % 16)
-		}
-
-		// Insertar reserva de stack después del prólogo
-		g.Emit("\t// Note: Stack space of %d bytes needed for local variables", stackSize)
-		// TODO: En una implementación real, insertaríamos esto después del prólogo
-		stackSpaceNeeded = true
-	}
-
 	// Salir del scope
 	g.exitScope()
 
@@ -724,12 +706,13 @@ func (g *ARM64Generator) VisitFuncDecl(node *ast.FuncDecl) interface{} {
 	if !hasExplicitReturn {
 		g.Emit("\t// Function epilogue (implicit return)")
 
-		// Valor de retorno por defecto
-		if node.ReturnType != "" && node.ReturnType != "void" {
-			g.Emit("\tmov x0, #0 // Default return value")
+		// Restaurar stack
+		if node.Name == "main" {
+			g.Emit("\tadd sp, sp, #64")
 		}
 
-		// Restaurar stack y retornar
+		// Valor de retorno por defecto
+		g.Emit("\tmov x0, #0")
 		g.Emit("\tldp x29, x30, [sp], #16")
 		g.Emit("\tret")
 	}
@@ -759,8 +742,7 @@ func (g *ARM64Generator) VisitReturn(node *ast.Return) interface{} {
 		if stackSize%16 != 0 {
 			stackSize += 16 - (stackSize % 16)
 		}
-		g.Emit("\t// Note: Should restore %d bytes of stack space", stackSize)
-		// TODO: En implementación real, restaurar stack aquí
+		g.Emit("\tadd sp, sp, #%d", stackSize)
 	}
 
 	// Epílogo y retorno
