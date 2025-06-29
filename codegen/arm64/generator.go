@@ -104,7 +104,7 @@ func (g *ARM64Generator) buildFinalOutput() string {
 
 	// Sección de datos
 	output.WriteString(".data\n")
-	output.WriteString("print_fmt: .asciz \"%s\"\n") // Añadir formato para printf
+	output.WriteString("print_fmt: .asciz \"%s\"\n")
 
 	// Agregar string literals
 	for str, label := range g.stringLiterals {
@@ -115,18 +115,7 @@ func (g *ARM64Generator) buildFinalOutput() string {
 
 	// Sección de texto
 	output.WriteString(".text\n")
-
-	// Si hay función main, no generar _start (dejamos que crt0 lo maneje)
-	if g.hasMainFunction() {
-		output.WriteString(".global main\n\n")
-	} else {
-		output.WriteString(".global _start\n\n")
-		output.WriteString("_start:\n")
-		output.WriteString("\tbl main\n")
-		output.WriteString("\tmov x0, #0\n")
-		output.WriteString("\tmov x16, #1\n")
-		output.WriteString("\tsvc #0x80\n\n")
-	}
+	output.WriteString(".global main\n\n") // Siempre usar main como punto de entrada
 
 	// Agregar el código generado
 	output.WriteString(g.GetOutput())
@@ -291,9 +280,9 @@ func (g *ARM64Generator) VisitProgram(node *ast.Program) interface{} {
 		}
 	}
 
-	// Si no hay main, crear _start para código top-level
+	// Si no hay main, generar código top-level como main
 	if !hasMain {
-		g.Emit("_start:")
+		g.Emit("main:")
 		g.Emit("\t// Setup stack frame")
 		g.Emit("\tstp x29, x30, [sp, #-16]!")
 		g.Emit("\tmov x29, sp")
@@ -305,6 +294,11 @@ func (g *ARM64Generator) VisitProgram(node *ast.Program) interface{} {
 				stmt.Accept(g)
 			}
 		}
+
+		// Retornar 0 (el runtime de C se encargará de la terminación)
+		g.Emit("\tmov w0, #0")
+		g.Emit("\tldp x29, x30, [sp], #16")
+		g.Emit("\tret")
 	}
 
 	return nil
